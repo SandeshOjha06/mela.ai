@@ -427,6 +427,11 @@ async def run_marketing_agent(
             "budget_estimate_report": event.budget_report or {},
             "direct_route": "marketing",
             "marketing_prompt": request.prompt,
+            "marketing_post": "",
+            "marketing_platform": "twitter",
+            "marketing_sentiment": "Positive/High Energy",
+            "marketing_day": 0,
+            "hourly_engagement": [],
             "email_csv_data": [],
             "email_sample_template": "",
             "schedule_prompt": "",
@@ -445,11 +450,19 @@ async def run_marketing_agent(
             "",
         ).replace("[Marketing_Agent] Drafted promotional content:\n", "", 1)
 
+        # Extract hourly engagement data from the result state
+        hourly_engagement = result.get("hourly_engagement", [])
+
         for log_msg in log_messages:
             agent_name = log_msg.split("]")[0].strip("[") if log_msg.startswith("[") else "Swarm"
             await crud.create_swarm_log(db=db, event_id=event_id, agent_name=agent_name, action_taken=log_msg)
 
-        return MarketingResult(event_id=event_id, generated_content=generated, logs=log_messages)
+        return MarketingResult(
+            event_id=event_id,
+            generated_content=generated,
+            hourly_engagement=hourly_engagement,
+            logs=log_messages
+        )
     except HTTPException:
         raise
     except Exception as e:

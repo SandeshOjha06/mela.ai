@@ -1,0 +1,68 @@
+"""
+EventState — the global shared state for the LangGraph Swarm.
+
+All agents read from and write to this typed dictionary. The Supervisor
+uses it to make routing decisions via conditional edges.
+"""
+
+import operator
+from typing import Annotated, Any, Sequence
+
+from langchain_core.messages import BaseMessage
+from typing_extensions import TypedDict
+
+
+class EventState(TypedDict):
+    """
+    Global state passed through the LangGraph execution graph.
+
+    Attributes:
+        event_id: The tenant event identifier (used to fetch DB records).
+        event_context: Dynamic rules/info fetched from the Events table,
+                       prepended to every agent's system prompt.
+        messages: Conversation history / log accumulator (append-only).
+        next_agent: Set by the Supervisor to route to the next worker node.
+        problem_category: Classification label set by Problem_Solver_Agent.
+            One of: 'finance', 'reschedule', 'urgent', 'normal', 'human_escalation'.
+        urgency_score: Severity rating (1-10) set by Problem_Solver_Agent.
+        schedule_changed_flag: Set to True by Scheduler_Agent when the
+                               master_schedule is modified.
+        emergency_handled_flag: Set to True by Emergency_Info_Agent after
+                                crisis alerts are dispatched.
+        master_schedule: The current or updated event schedule (JSONB dict).
+        budget_estimate_report: Financial breakdown produced by
+                                Budget_Finance_Agent (JSONB dict).
+    """
+
+    event_id: int
+    event_context: str
+    messages: Annotated[Sequence[BaseMessage], operator.add]
+    next_agent: str
+    problem_category: str
+    urgency_score: int
+    schedule_changed_flag: bool
+    emergency_handled_flag: bool
+    master_schedule: dict[str, Any]
+    budget_estimate_report: dict[str, Any]
+
+    # Direct routing: when set, the supervisor bypasses problem-triage
+    # and routes to this agent first. Used by dedicated agent endpoints.
+    direct_route: str
+
+    # Marketing agent: user's raw promotional prompt
+    marketing_prompt: str
+    
+    # Marketing agent outputs: post content and hourly engagement predictions
+    marketing_post: str
+    marketing_platform: str
+    marketing_sentiment: str
+    marketing_day: int
+    hourly_engagement: list[dict[str, Any]]
+
+    # Email agent: parsed CSV contacts and sample template
+    email_csv_data: list[dict[str, Any]]
+    email_sample_template: str
+
+    # Scheduler agent: constraint text and time-based overrides
+    schedule_prompt: str
+    schedule_time_constraints: dict[str, Any]
