@@ -374,7 +374,24 @@ async def email_agent(state: EventState) -> dict[str, Any]:
 
     csv_contacts = state.get("email_csv_data") or []
 
-    # Collect the distinct segments present in the CSV
+    # When chained from emergency/scheduler (no CSV), fetch joined participants from DB
+    if not csv_contacts:
+        from app.db.session import async_session_factory
+        from app.db import crud as _crud
+
+        async with async_session_factory() as db:
+            participants = await _crud.get_participants_by_event(db, state["event_id"])
+            if participants:
+                csv_contacts = [
+                    {
+                        "email": p.email,
+                        "name": p.name,
+                        "segment": p.segment_category or "general",
+                    }
+                    for p in participants
+                ]
+
+    # Collect the distinct segments present in the contacts
     if csv_contacts:
         segments = sorted({
             (c.get("segment") or c.get("status") or "General").title()
@@ -451,7 +468,7 @@ Output ONLY the JSON object — no preamble, no explanation, no markdown fences.
         subject = email_data.get("subject", "Event Update Notification")
         body = email_data.get("body", "")
 
-        # Filter CSV contacts whose segment matches this key (case-insensitive)
+        # Filter contacts whose segment matches this key (case-insensitive)
         if csv_contacts:
             segment_recipients = [
                 c["email"] for c in csv_contacts
@@ -460,7 +477,7 @@ Output ONLY the JSON object — no preamble, no explanation, no markdown fences.
                 == segment_name.lower()
             ]
         else:
-            segment_recipients = ["participant@example.com"]
+            segment_recipients = []
 
         if not segment_recipients:
             send_log_lines.append(f"  - Segment '{segment_name}': 0 recipients (skipped)")

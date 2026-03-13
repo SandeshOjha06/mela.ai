@@ -78,7 +78,23 @@ async def join_event(
         if event is None:
             raise HTTPException(status_code=404, detail="Event not found.")
 
-        logger.info(f"Participant {request.email} joined event {event.event_id} via code {request.code}")
+        # Persist participant if they don't already exist for this event
+        existing_participant = await crud.get_participant_by_email(
+            db, event_id=event.event_id, email=request.email
+        )
+        if not existing_participant:
+            # Derive name from email if not provided
+            name = request.name or request.email.split("@")[0]
+            await crud.create_participant(
+                db,
+                event_id=event.event_id,
+                name=name,
+                email=request.email,
+                segment_category="general",
+            )
+            logger.info(f"New participant {request.email} joined event {event.event_id} via code {request.code}")
+        else:
+            logger.info(f"Existing participant {request.email} rejoined event {event.event_id} via code {request.code}")
 
         return JoinEventResponse(
             event_id=event.event_id,
