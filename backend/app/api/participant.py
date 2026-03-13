@@ -149,41 +149,94 @@ async def chat_with_rag(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    RAG Chatbot endpoint.
+    Context-aware RAG Chatbot endpoint.
 
-    Queries ChromaDB filtered by event_id:
-      - If similarity confidence > 0.75, return the answer.
-      - If < 0.75, save to Unresolved_Queries and return a fallback message.
+    Combines event data from PostgreSQL (budget, schedule, rules) with
+    any resolved Q&A from ChromaDB, then uses the LLM to generate a
+    natural-language answer grounded in real event context.
+
+    Falls back to organizer escalation only when neither source helps.
     """
     try:
         event = await crud.get_event_context(db, event_id)
         if event is None:
             raise HTTPException(status_code=404, detail=f"Event {event_id} not found.")
 
-        answer, confidence = query_rag(event_id=event_id, question=request.question)
+        # ── 1. Build context from PostgreSQL ─────────────────────────────
+        import json as _json
+        schedule_str = _json.dumps(event.master_schedule, indent=2) if event.master_schedule else "No schedule available."
+        budget_str = _json.dumps(event.budget_report, indent=2) if event.budget_report else "No budget information available."
 
-        if confidence >= RAG_CONFIDENCE_THRESHOLD and answer:
-            return ChatResponse(
-                answer=answer,
-                confidence=confidence,
-                source="rag",
-            )
-        else:
+        pg_context = f"""EVENT NAME: {event.event_name}
+ORGANIZER: {event.organizer_name}
+RULES & CONTEXT: {event.event_rules_and_context or "No specific rules."}
+TOTAL BUDGET: {event.total_budget_allocated}
+MASTER SCHEDULE: {schedule_str}
+BUDGET REPORT: {budget_str}"""
+
+        # ── 2. Query ChromaDB for resolved Q&A ──────────────────────────
+        rag_answer, rag_confidence = query_rag(event_id=event_id, question=request.question)
+
+        rag_section = ""
+        if rag_answer and rag_confidence >= 0.5:
+            rag_section = f"\n\nPREVIOUSLY RESOLVED Q&A (confidence {rag_confidence}):\n{rag_answer}"
+
+        # ── 3. Ask LLM to answer using combined context ─────────────────
+        from langchain_groq import ChatGroq
+        from langchain_core.messages import SystemMessage as _Sys, HumanMessage as _Hum
+        from app.config import settings
+
+        llm = ChatGroq(
+            model=settings.LLM_MODEL,
+            api_key=settings.GROQ_API_KEY,
+            temperature=0.3,
+        )
+
+        system_prompt = f"""You are a helpful Q&A assistant for participants of an event.
+Answer the participant's question using ONLY the event information provided below.
+If the information is not available in the context, say so honestly.
+Be concise, friendly, and direct. Do NOT make up information.
+
+{pg_context}{rag_section}"""
+
+        response = await llm.ainvoke([
+            _Sys(content=system_prompt),
+            _Hum(content=request.question),
+        ])
+
+        answer_text = response.content.strip()
+
+        # ── 4. Determine confidence ─────────────────────────────────────
+        # If the LLM says it doesn't know, treat as low confidence
+        no_answer_phrases = [
+            "not available", "don't have", "no information",
+            "cannot find", "not provided", "not mentioned",
+            "i'm not sure", "i don't know",
+        ]
+        is_uncertain = any(phrase in answer_text.lower() for phrase in no_answer_phrases)
+
+        if is_uncertain:
+            # Save as unresolved for the organizer to answer
             await crud.create_unresolved_query(
                 db=db,
                 event_id=event_id,
                 question_text=request.question,
             )
-
             return ChatResponse(
                 answer=(
-                    "Thank you for your question! I wasn't able to find a confident "
-                    "answer in our knowledge base. Your question has been forwarded to "
-                    "the event organizers, and they will respond shortly."
+                    f"{answer_text}\n\nYour question has been forwarded to the "
+                    "event organizers for a detailed response."
                 ),
-                confidence=confidence,
+                confidence=0.3,
                 source="fallback",
             )
+
+        return ChatResponse(
+            answer=answer_text,
+            confidence=max(rag_confidence, 0.85),
+            source="rag" if rag_confidence >= 0.5 else "llm_context",
+        )
+
     except HTTPException:
         raise
     except Exception as e:
