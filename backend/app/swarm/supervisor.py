@@ -91,9 +91,13 @@ async def supervisor_node(state: EventState) -> dict[str, Any]:
         routing_reason = "No classification yet. Routing to Problem Solver for triage."
 
     elif category == "finance":
-        # Check if budget report already generated
-        budget_report = state.get("budget_estimate_report", {})
-        if not budget_report:
+        # Check if the Budget Finance Agent has already run in THIS session
+        # (not whether a budget report exists in DB — that's always pre-loaded)
+        budget_agent_ran = any(
+            getattr(m, "name", None) == "Budget_Finance_Agent"
+            for m in state.get("messages", [])
+        )
+        if not budget_agent_ran:
             next_agent = BUDGET_FINANCE
             routing_reason = "Finance issue detected. Routing to Budget Finance Agent."
         else:

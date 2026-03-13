@@ -532,6 +532,7 @@ Output ONLY the JSON object — no preamble, no explanation, no markdown fences.
     # Dispatch one bulk send per segment and collect results
     send_log_lines: list[str] = []
     total_sent = 0
+    delivery_results: list[dict[str, Any]] = []
 
     for segment_name, email_data in segment_emails.items():
         subject = email_data.get("subject", "Event Update Notification")
@@ -552,24 +553,62 @@ Output ONLY the JSON object — no preamble, no explanation, no markdown fences.
             send_log_lines.append(f"  - Segment '{segment_name}': 0 recipients (skipped)")
             continue
 
-        send_bulk_email(
+        send_result = send_bulk_email(
             event_id=state["event_id"],
             recipients=segment_recipients,
             subject=subject,
             body=body,
         )
-        total_sent += len(segment_recipients)
+        delivery_results.append({
+            "segment": segment_name,
+            "attempted": len(segment_recipients),
+            "subject": subject,
+            "status": send_result.get("status", "unknown"),
+            "message": send_result.get("message", ""),
+            "sent": int(send_result.get("recipients_count", 0)),
+        })
+        total_sent += int(send_result.get("recipients_count", 0))
         send_log_lines.append(
-            f"  - Segment '{segment_name}': {len(segment_recipients)} recipient(s)"
+            f"  - Segment '{segment_name}': {send_result.get('recipients_count', 0)}/{len(segment_recipients)} sent"
+            f" | Status: {send_result.get('status', 'unknown')}"
             f" | Subject: \"{subject}\""
         )
 
     audience_label = "participant update" if is_update else "invitation"
+    delivery_issue = any(
+        r.get("status") in {"mock_sent", "auth_error", "connection_error", "partial"}
+        for r in delivery_results
+    )
     log_msg = (
         f"[Email_Agent] Segmented {audience_label} email campaign complete. "
         f"{total_sent} total recipient(s) across {len(send_log_lines)} segment(s).\n"
         + "\n".join(send_log_lines)
     )
+    if delivery_issue:
+        log_msg += (
+            "\n[Email_Agent] Delivery warning: SMTP may be unconfigured or had errors. "
+            "Check SMTP_USER/SMTP_APP_PASSWORD and App Password settings."
+        )
+
+    # Persist email runs for every invocation path (direct endpoint + supervisor chains).
+    try:
+        from app.db.crud import create_email_log
+        from app.db.session import async_session_factory
+
+        async with async_session_factory() as db:
+            await create_email_log(
+                db=db,
+                event_id=state["event_id"],
+                sample_email=sample_template,
+                csv_contacts=csv_contacts,
+                recipients_count=total_sent,
+                agent_response=log_msg,
+            )
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(
+            f"[Email_Agent] Failed to persist email log: {e}"
+        )
 
     return {
         "messages": [AIMessage(content=log_msg, name="Email_Agent")],

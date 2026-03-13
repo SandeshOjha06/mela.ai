@@ -720,13 +720,6 @@ async def run_email_agent(
             agent_name = log_msg.split("]")[0].strip("[") if log_msg.startswith("[") else "Swarm"
             await crud.create_swarm_log(db=db, event_id=event_id, agent_name=agent_name, action_taken=log_msg)
 
-        # Persist to agent-specific table
-        await crud.create_email_log(
-            db=db, event_id=event_id, sample_email=sample_email,
-            csv_contacts=csv_contacts, recipients_count=len(csv_contacts),
-            agent_response="\n".join(log_messages),
-        )
-
         return EmailCampaignResult(
             event_id=event_id,
             recipients_count=len(csv_contacts),
@@ -860,7 +853,7 @@ async def run_emergency_agent(
             "emergency_alert_message": "",
             "master_schedule": event.master_schedule or {},
             "budget_estimate_report": event.budget_report or {},
-            "direct_route": "emergency_info",
+            "direct_route": "",
             "marketing_prompt": "",
             "email_csv_data": [],
             "email_sample_template": "",
