@@ -12,7 +12,7 @@ from typing import Optional, Sequence
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Event, Participant, SwarmLog, Ticket, UnresolvedQuery
+from app.db.models import ConversationLog, Event, Participant, SwarmLog, Ticket, UnresolvedQuery
 
 
 # ---------------------------------------------------------------------------
@@ -275,3 +275,50 @@ async def create_participant(
     await db.commit()
     await db.refresh(participant)
     return participant
+
+
+# ---------------------------------------------------------------------------
+# Conversation Log CRUD
+# ---------------------------------------------------------------------------
+
+async def create_conversation_log(
+    db: AsyncSession,
+    event_id: int,
+    agent_name: str,
+    user_input: str,
+    agent_response: str,
+    structured_data: dict | None = None,
+) -> ConversationLog:
+    """Save a full agent interaction (input + response + structured data)."""
+    log = ConversationLog(
+        event_id=event_id,
+        agent_name=agent_name,
+        user_input=user_input,
+        agent_response=agent_response,
+        structured_data=structured_data,
+    )
+    db.add(log)
+    await db.commit()
+    await db.refresh(log)
+    return log
+
+
+async def get_conversation_logs(
+    db: AsyncSession,
+    event_id: int,
+    agent_name: str | None = None,
+) -> Sequence[ConversationLog]:
+    """
+    Fetch conversation logs for an event, optionally filtered by agent.
+    Returns logs ordered by created_at descending (newest first).
+    """
+    from sqlalchemy import desc
+    stmt = (
+        select(ConversationLog)
+        .where(ConversationLog.event_id == event_id)
+        .order_by(desc(ConversationLog.created_at))
+    )
+    if agent_name:
+        stmt = stmt.where(ConversationLog.agent_name == agent_name)
+    result = await db.execute(stmt)
+    return result.scalars().all()

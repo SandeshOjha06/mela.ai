@@ -330,3 +330,20 @@ class EventStatusUpdate(BaseModel):
         ..., pattern="^(active|completed|archived)$",
         description="New status: 'active', 'completed', or 'archived'"
     )
+
+
+# ---------------------------------------------------------------------------
+# Conversation Log Schemas
+# ---------------------------------------------------------------------------
+
+class ConversationLogResponse(BaseModel):
+    """Response schema for a saved agent interaction."""
+    log_id: int
+    event_id: int
+    agent_name: str
+    user_input: str
+    agent_response: str
+    structured_data: Optional[dict[str, Any]] = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}

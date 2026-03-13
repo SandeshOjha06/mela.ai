@@ -44,6 +44,7 @@ class Event(Base):
     unresolved_queries = relationship("UnresolvedQuery", back_populates="event", cascade="all, delete-orphan")
     swarm_logs = relationship("SwarmLog", back_populates="event", cascade="all, delete-orphan")
     event_code = relationship("EventCode", back_populates="event", uselist=False, cascade="all, delete-orphan")
+    conversation_logs = relationship("ConversationLog", back_populates="event", cascade="all, delete-orphan")
 
 
 class Participant(Base):
@@ -104,3 +105,22 @@ class EventCode(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
 
     event = relationship("Event", back_populates="event_code")
+
+
+class ConversationLog(Base):
+    """
+    Stores every agent interaction: the user's input, the agent's full response,
+    and any structured data (CSV contacts, budget reports, schedules, etc.).
+    Scoped by event_id for multi-tenant isolation.
+    """
+    __tablename__ = "conversation_logs"
+
+    log_id = Column(Integer, primary_key=True, autoincrement=True)
+    event_id = Column(Integer, ForeignKey("events.event_id", ondelete="CASCADE"), nullable=False)
+    agent_name = Column(String(100), nullable=False)
+    user_input = Column(Text, nullable=False)
+    agent_response = Column(Text, nullable=False)
+    structured_data = Column(JSON, nullable=True, default=None)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    event = relationship("Event", back_populates="conversation_logs")

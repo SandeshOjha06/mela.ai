@@ -26,6 +26,7 @@ from app.db.models import EventCode
 from app.schemas.schemas import (
     BudgetAgentRequest,
     BudgetAgentResult,
+    ConversationLogResponse,
     EmailCampaignResult,
     EmergencyAgentRequest,
     EmergencyAgentResult,
@@ -379,6 +380,21 @@ async def trigger_swarm(
                 action_taken=log_msg,
             )
 
+        # Persist conversation log
+        await crud.create_conversation_log(
+            db=db,
+            event_id=event_id,
+            agent_name="swarm",
+            user_input=request.command,
+            agent_response="\n".join(log_messages),
+            structured_data={
+                "problem_category": result.get("problem_category", ""),
+                "urgency_score": result.get("urgency_score", 0),
+                "master_schedule": result.get("master_schedule", {}),
+                "budget_estimate_report": result.get("budget_estimate_report", {}),
+            },
+        )
+
         return SwarmResult(
             event_id=event_id,
             problem_category=result.get("problem_category", ""),
@@ -587,6 +603,22 @@ async def run_marketing_agent(
             agent_name = log_msg.split("]")[0].strip("[") if log_msg.startswith("[") else "Swarm"
             await crud.create_swarm_log(db=db, event_id=event_id, agent_name=agent_name, action_taken=log_msg)
 
+        # Persist conversation log
+        await crud.create_conversation_log(
+            db=db,
+            event_id=event_id,
+            agent_name="marketing",
+            user_input=request.prompt,
+            agent_response=generated,
+            structured_data={
+                "marketing_post": result.get("marketing_post", ""),
+                "marketing_platform": result.get("marketing_platform", ""),
+                "marketing_sentiment": result.get("marketing_sentiment", ""),
+                "marketing_day": result.get("marketing_day", 0),
+                "hourly_engagement": hourly_engagement,
+            },
+        )
+
         return MarketingResult(
             event_id=event_id,
             generated_content=generated,
@@ -677,6 +709,19 @@ async def run_email_agent(
             agent_name = log_msg.split("]")[0].strip("[") if log_msg.startswith("[") else "Swarm"
             await crud.create_swarm_log(db=db, event_id=event_id, agent_name=agent_name, action_taken=log_msg)
 
+        # Persist conversation log (includes CSV data for later reuse)
+        await crud.create_conversation_log(
+            db=db,
+            event_id=event_id,
+            agent_name="email",
+            user_input=sample_email,
+            agent_response="\n".join(log_messages),
+            structured_data={
+                "csv_contacts": csv_contacts,
+                "recipients_count": len(csv_contacts),
+            },
+        )
+
         return EmailCampaignResult(
             event_id=event_id,
             recipients_count=len(csv_contacts),
@@ -750,6 +795,19 @@ async def run_scheduler_agent(
             agent_name = log_msg.split("]")[0].strip("[") if log_msg.startswith("[") else "Swarm"
             await crud.create_swarm_log(db=db, event_id=event_id, agent_name=agent_name, action_taken=log_msg)
 
+        # Persist conversation log
+        await crud.create_conversation_log(
+            db=db,
+            event_id=event_id,
+            agent_name="scheduler",
+            user_input=request.prompt,
+            agent_response="\n".join(log_messages),
+            structured_data={
+                "master_schedule": result.get("master_schedule", {}),
+                "time_constraints": request.time_constraints,
+            },
+        )
+
         return ScheduleAgentResult(
             event_id=event_id,
             master_schedule=result.get("master_schedule", {}),
@@ -818,6 +876,18 @@ async def run_emergency_agent(
         for log_msg in log_messages:
             agent_name = log_msg.split("]")[0].strip("[") if log_msg.startswith("[") else "Swarm"
             await crud.create_swarm_log(db=db, event_id=event_id, agent_name=agent_name, action_taken=log_msg)
+
+        # Persist conversation log
+        await crud.create_conversation_log(
+            db=db,
+            event_id=event_id,
+            agent_name="emergency",
+            user_input=request.problem_description,
+            agent_response="\n".join(log_messages),
+            structured_data={
+                "emergency_handled": result.get("emergency_handled_flag", False),
+            },
+        )
 
         return EmergencyAgentResult(
             event_id=event_id,
@@ -892,6 +962,18 @@ async def run_budget_agent(
             agent_name = log_msg.split("]")[0].strip("[") if log_msg.startswith("[") else "Swarm"
             await crud.create_swarm_log(db=db, event_id=event_id, agent_name=agent_name, action_taken=log_msg)
 
+        # Persist conversation log
+        await crud.create_conversation_log(
+            db=db,
+            event_id=event_id,
+            agent_name="budget",
+            user_input=request.request_description,
+            agent_response="\n".join(log_messages),
+            structured_data={
+                "budget_estimate_report": result.get("budget_estimate_report", {}),
+            },
+        )
+
         return BudgetAgentResult(
             event_id=event_id,
             budget_estimate_report=result.get("budget_estimate_report", {}),
@@ -901,4 +983,46 @@ async def run_budget_agent(
         raise
     except Exception as e:
         logger.error(f"Error running budget agent for event {event_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+# ---------------------------------------------------------------------------
+# GET /organizer/events/{event_id}/conversation_logs
+# ---------------------------------------------------------------------------
+
+@router.get("/conversation_logs", response_model=list[ConversationLogResponse])
+async def get_conversation_logs(
+    event_id: int,
+    agent: str | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Retrieve saved conversation logs for an event.
+
+    Use ?agent=marketing|email|scheduler|budget|emergency|swarm to filter
+    by a specific agent. Returns all logs (newest first) if no filter.
+    """
+    try:
+        event = await crud.get_event_context(db, event_id)
+        if event is None:
+            raise HTTPException(status_code=404, detail=f"Event {event_id} not found.")
+
+        logs = await crud.get_conversation_logs(db, event_id, agent_name=agent)
+
+        return [
+            ConversationLogResponse(
+                log_id=log.log_id,
+                event_id=log.event_id,
+                agent_name=log.agent_name,
+                user_input=log.user_input,
+                agent_response=log.agent_response,
+                structured_data=log.structured_data,
+                created_at=log.created_at,
+            )
+            for log in logs
+        ]
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching conversation logs for event {event_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
