@@ -12,7 +12,19 @@ from typing import Optional, Sequence
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Event, Participant, SwarmLog, Ticket, UnresolvedQuery
+from app.db.models import (
+    BudgetLog,
+    EmailLog,
+    EmergencyLog,
+    Event,
+    MarketingLog,
+    Participant,
+    SchedulerLog,
+    SwarmInteractionLog,
+    SwarmLog,
+    Ticket,
+    UnresolvedQuery,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -275,3 +287,170 @@ async def create_participant(
     await db.commit()
     await db.refresh(participant)
     return participant
+
+
+# ---------------------------------------------------------------------------
+# Agent-Specific Log CRUD
+# ---------------------------------------------------------------------------
+
+async def create_swarm_interaction_log(
+    db: AsyncSession, event_id: int, command: str, problem_category: str,
+    urgency_score: int, schedule_changed: bool, emergency_handled: bool,
+    master_schedule: dict, budget_report: dict, agent_response: str,
+) -> SwarmInteractionLog:
+    log = SwarmInteractionLog(
+        event_id=event_id, command=command, problem_category=problem_category,
+        urgency_score=urgency_score, schedule_changed=schedule_changed,
+        emergency_handled=emergency_handled, master_schedule=master_schedule,
+        budget_report=budget_report, agent_response=agent_response,
+    )
+    db.add(log)
+    await db.commit()
+    await db.refresh(log)
+    return log
+
+
+async def get_swarm_interaction_logs(
+    db: AsyncSession, event_id: int,
+) -> Sequence[SwarmInteractionLog]:
+    from sqlalchemy import desc
+    result = await db.execute(
+        select(SwarmInteractionLog)
+        .where(SwarmInteractionLog.event_id == event_id)
+        .order_by(desc(SwarmInteractionLog.created_at))
+    )
+    return result.scalars().all()
+
+
+async def create_marketing_log(
+    db: AsyncSession, event_id: int, prompt: str, generated_content: str,
+    marketing_post: str, marketing_platform: str, marketing_sentiment: str,
+    marketing_day: int, hourly_engagement: list, agent_response: str,
+) -> MarketingLog:
+    log = MarketingLog(
+        event_id=event_id, prompt=prompt, generated_content=generated_content,
+        marketing_post=marketing_post, marketing_platform=marketing_platform,
+        marketing_sentiment=marketing_sentiment, marketing_day=marketing_day,
+        hourly_engagement=hourly_engagement, agent_response=agent_response,
+    )
+    db.add(log)
+    await db.commit()
+    await db.refresh(log)
+    return log
+
+
+async def get_marketing_logs(
+    db: AsyncSession, event_id: int,
+) -> Sequence[MarketingLog]:
+    from sqlalchemy import desc
+    result = await db.execute(
+        select(MarketingLog)
+        .where(MarketingLog.event_id == event_id)
+        .order_by(desc(MarketingLog.created_at))
+    )
+    return result.scalars().all()
+
+
+async def create_email_log(
+    db: AsyncSession, event_id: int, sample_email: str,
+    csv_contacts: list, recipients_count: int, agent_response: str,
+) -> EmailLog:
+    log = EmailLog(
+        event_id=event_id, sample_email=sample_email,
+        csv_contacts=csv_contacts, recipients_count=recipients_count,
+        agent_response=agent_response,
+    )
+    db.add(log)
+    await db.commit()
+    await db.refresh(log)
+    return log
+
+
+async def get_email_logs(
+    db: AsyncSession, event_id: int,
+) -> Sequence[EmailLog]:
+    from sqlalchemy import desc
+    result = await db.execute(
+        select(EmailLog)
+        .where(EmailLog.event_id == event_id)
+        .order_by(desc(EmailLog.created_at))
+    )
+    return result.scalars().all()
+
+
+async def create_scheduler_log(
+    db: AsyncSession, event_id: int, prompt: str,
+    master_schedule: dict, time_constraints: dict, agent_response: str,
+) -> SchedulerLog:
+    log = SchedulerLog(
+        event_id=event_id, prompt=prompt, master_schedule=master_schedule,
+        time_constraints=time_constraints, agent_response=agent_response,
+    )
+    db.add(log)
+    await db.commit()
+    await db.refresh(log)
+    return log
+
+
+async def get_scheduler_logs(
+    db: AsyncSession, event_id: int,
+) -> Sequence[SchedulerLog]:
+    from sqlalchemy import desc
+    result = await db.execute(
+        select(SchedulerLog)
+        .where(SchedulerLog.event_id == event_id)
+        .order_by(desc(SchedulerLog.created_at))
+    )
+    return result.scalars().all()
+
+
+async def create_emergency_log(
+    db: AsyncSession, event_id: int, problem_description: str,
+    emergency_handled: bool, agent_response: str,
+) -> EmergencyLog:
+    log = EmergencyLog(
+        event_id=event_id, problem_description=problem_description,
+        emergency_handled=emergency_handled, agent_response=agent_response,
+    )
+    db.add(log)
+    await db.commit()
+    await db.refresh(log)
+    return log
+
+
+async def get_emergency_logs(
+    db: AsyncSession, event_id: int,
+) -> Sequence[EmergencyLog]:
+    from sqlalchemy import desc
+    result = await db.execute(
+        select(EmergencyLog)
+        .where(EmergencyLog.event_id == event_id)
+        .order_by(desc(EmergencyLog.created_at))
+    )
+    return result.scalars().all()
+
+
+async def create_budget_log(
+    db: AsyncSession, event_id: int, request_description: str,
+    budget_report: dict, agent_response: str,
+) -> BudgetLog:
+    log = BudgetLog(
+        event_id=event_id, request_description=request_description,
+        budget_report=budget_report, agent_response=agent_response,
+    )
+    db.add(log)
+    await db.commit()
+    await db.refresh(log)
+    return log
+
+
+async def get_budget_logs(
+    db: AsyncSession, event_id: int,
+) -> Sequence[BudgetLog]:
+    from sqlalchemy import desc
+    result = await db.execute(
+        select(BudgetLog)
+        .where(BudgetLog.event_id == event_id)
+        .order_by(desc(BudgetLog.created_at))
+    )
+    return result.scalars().all()

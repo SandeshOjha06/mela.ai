@@ -330,3 +330,79 @@ class EventStatusUpdate(BaseModel):
         ..., pattern="^(active|completed|archived)$",
         description="New status: 'active', 'completed', or 'archived'"
     )
+
+
+# ---------------------------------------------------------------------------
+# Agent-Specific Log Response Schemas
+# ---------------------------------------------------------------------------
+
+class SwarmInteractionLogResponse(BaseModel):
+    id: int
+    event_id: int
+    command: str
+    problem_category: str
+    urgency_score: int
+    schedule_changed: bool
+    emergency_handled: bool
+    master_schedule: dict[str, Any]
+    budget_report: dict[str, Any]
+    agent_response: str
+    created_at: datetime
+    model_config = {"from_attributes": True}
+
+
+class MarketingLogResponse(BaseModel):
+    id: int
+    event_id: int
+    prompt: str
+    generated_content: str
+    marketing_post: str
+    marketing_platform: str
+    marketing_sentiment: str
+    marketing_day: int
+    hourly_engagement: list[Any]
+    agent_response: str
+    created_at: datetime
+    model_config = {"from_attributes": True}
+
+
+class EmailLogResponse(BaseModel):
+    id: int
+    event_id: int
+    sample_email: str
+    csv_contacts: list[Any]
+    recipients_count: int
+    agent_response: str
+    created_at: datetime
+    model_config = {"from_attributes": True}
+
+
+class SchedulerLogResponse(BaseModel):
+    id: int
+    event_id: int
+    prompt: str
+    master_schedule: dict[str, Any]
+    time_constraints: dict[str, Any]
+    agent_response: str
+    created_at: datetime
+    model_config = {"from_attributes": True}
+
+
+class EmergencyLogResponse(BaseModel):
+    id: int
+    event_id: int
+    problem_description: str
+    emergency_handled: bool
+    agent_response: str
+    created_at: datetime
+    model_config = {"from_attributes": True}
+
+
+class BudgetLogResponse(BaseModel):
+    id: int
+    event_id: int
+    request_description: str
+    budget_report: dict[str, Any]
+    agent_response: str
+    created_at: datetime
+    model_config = {"from_attributes": True}
