@@ -44,19 +44,25 @@ def _get_llm() -> ChatGroq:
     )
 
 
+# Allowed problem categories for validation
+_VALID_CATEGORIES = {"finance", "reschedule", "urgent", "normal", "human_escalation"}
+
+
 def _extract_emergency_alert(text: str) -> str:
     """
     Normalize LLM output into a single dashboard alert line.
 
     Rules enforced:
-    - Must begin with the red alert emoji.
+    - Must begin with "🚨 CRITICAL ALERT: ".
     - Must be <= 100 characters.
     - Must be single-line, no markdown wrappers.
     """
     cleaned = text.strip()
+    # Strip markdown code fences if present
     cleaned = re.sub(r"^```(?:text)?\s*", "", cleaned)
     cleaned = re.sub(r"\s*```$", "", cleaned.strip())
 
+    # Extract the first non-empty line
     first_line = ""
     for line in cleaned.splitlines():
         candidate = line.strip()
@@ -67,13 +73,18 @@ def _extract_emergency_alert(text: str) -> str:
     if not first_line:
         first_line = "Emergency reported. Organizer action required."
 
-    first_line = re.sub(r"^(?:ALERT\s*MESSAGE|ALERT)\s*:\s*", "", first_line, flags=re.IGNORECASE)
+    # Strip common LLM preamble labels
+    first_line = re.sub(
+        r"^(?:ALERT\s*MESSAGE|ALERT|CRITICAL\s*ALERT)\s*:\s*",
+        "", first_line, flags=re.IGNORECASE,
+    )
     first_line = first_line.strip().strip('"').strip("'")
 
-    if first_line.startswith("🚨"):
-        alert = first_line
-    else:
-        alert = f"🚨 {first_line}"
+    # Strip any existing leading emoji / prefix so we can re-apply canonically
+    first_line = re.sub(r"^🚨\s*(?:CRITICAL\s+ALERT\s*:?\s*)?", "", first_line).strip()
+
+    # Apply the canonical prefix
+    alert = f"🚨 CRITICAL ALERT: {first_line}"
 
     if len(alert) > 100:
         alert = alert[:100].rstrip()
@@ -82,36 +93,59 @@ def _extract_emergency_alert(text: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# 1. Problem Solver Agent (Classifier & Triage)
+# 1. Problem Solver Agent (Classifier & Triage — Anti-Panic Gatekeeper)
 # ---------------------------------------------------------------------------
 
 async def problem_solver_agent(state: EventState) -> dict[str, Any]:
     """
     Classify the input issue into a problem_category and assign an
-    urgency_score (1-10) based on severity.
+    urgency_score based on severity.
+
+    Acts as an Anti-Panic Gatekeeper: only genuine life-threatening or
+    severe venue-safety issues are classified as "urgent".  Technical
+    glitches, lost items, and angry attendees are downgraded.
 
     Categories: finance, reschedule, urgent, normal, human_escalation
     """
     llm = _get_llm()
 
-    system_prompt = f"""You are the Problem Solver Agent for an event management system.
+    system_prompt = f"""You are the Problem Solver Agent — the Anti-Panic Gatekeeper — for an event management system.
 
 EVENT CONTEXT:
 {state['event_context']}
 
 Your task is to analyze the user's issue and:
-1. Classify it into exactly ONE category: finance, reschedule, urgent, normal, or human_escalation
-2. Assign an urgency_score from 1 (lowest) to 10 (highest)
+1. Classify it into exactly ONE category.
+2. Assign an urgency_score (integer).
 
-Respond ONLY with valid JSON in this exact format:
-{{"problem_category": "<category>", "urgency_score": <1-10>, "reasoning": "<brief explanation>"}}
+You MUST respond with ONLY valid JSON — no markdown code fences, no preamble, no explanation outside the JSON.
+Exact format:
+{{"problem_category": "<category>", "urgency_score": <integer>, "reasoning": "<brief explanation>"}}
 
-Classification guidelines:
-- "finance": Budget concerns, payment issues, cost overruns, sponsorship queries
-- "reschedule": Time changes, venue conflicts, schedule clashes, timeline adjustments
-- "urgent": Safety hazards, medical emergencies, security threats, critical infrastructure failure
-- "normal": General inquiries, feedback, minor logistical issues
-- "human_escalation": Complex issues requiring human judgment, policy decisions, VIP complaints
+CLASSIFICATION & SCORING RULES (follow these EXACTLY):
+
+• "finance"  — Budget concerns, payment issues, cost overruns, sponsorship queries.
+  urgency_score MUST be 0.
+
+• "reschedule"  — Delays, timetable clashes, venue conflicts, timeline adjustments.
+  urgency_score MUST be 0.
+
+• "urgent"  — ONLY for immediate physical threats to life, health, or severe venue safety
+  (fire, medical emergency, structural collapse, active security threat).
+  urgency_score MUST be an integer between 8 and 10.
+  *** ANTI-PANIC GUARDRAIL ***
+  Do NOT classify the following as "urgent" — downgrade to "normal" or "human_escalation":
+    - Technical glitches (projector broken, Wi-Fi down, mic not working)
+    - Lost or stolen personal items
+    - Angry or upset attendees / interpersonal conflicts
+    - Catering complaints or minor logistical hiccups
+
+• "human_escalation"  — Complex manual problems requiring human judgment (repairs, legal,
+  VIP complaints, policy decisions).
+  urgency_score MUST be an integer between 1 and 7.
+
+• "normal"  — General inquiries, feedback, tech glitches, minor complaints.
+  urgency_score MUST be an integer between 1 and 7.
 """
 
     # Get the latest user message (the issue being reported)
@@ -123,7 +157,7 @@ Classification guidelines:
         HumanMessage(content=f"Classify this issue: {issue_text}"),
     ])
 
-    # Parse the LLM response
+    # Parse the LLM response (strip markdown fences if present)
     try:
         parsed = _parse_json(response.content)
         category = parsed.get("problem_category", "normal")
@@ -134,8 +168,24 @@ Classification guidelines:
         score = 5
         reasoning = "Could not parse LLM response; defaulting to normal category."
 
-    # Clamp urgency score
-    score = max(1, min(10, score))
+    # Validate category against allowed set
+    if category not in _VALID_CATEGORIES:
+        reasoning = (
+            f"LLM returned unknown category '{category}'; "
+            f"defaulting to 'normal'. Original reasoning: {reasoning}"
+        )
+        category = "normal"
+        score = 5
+
+    # Enforce per-category urgency clamping rules
+    if category == "finance":
+        score = 0
+    elif category == "reschedule":
+        score = 0
+    elif category == "urgent":
+        score = max(8, min(10, score))
+    elif category in ("normal", "human_escalation"):
+        score = max(1, min(7, score))
 
     log_msg = f"[Problem_Solver] Category: {category}, Urgency: {score}/10. {reasoning}"
 
@@ -490,13 +540,16 @@ Output ONLY the JSON object — no preamble, no explanation, no markdown fences.
 
 
 # ---------------------------------------------------------------------------
-# 5. Emergency Info Agent (Crisis Manager)
+# 5. Emergency Info Agent (UI Alert Generator)
 # ---------------------------------------------------------------------------
 
 async def emergency_info_agent(state: EventState) -> dict[str, Any]:
     """
-    Handle urgent/crisis situations by generating a high-visibility
-    dashboard alert for organizers.
+    Generate a high-visibility RED ALERT for the Organizer Dashboard.
+
+    This agent does NOT send SMS or email — its ONLY job is to draft
+    a concise UI alert string. The Supervisor routes to Email_Agent
+    afterwards if mass notification is needed.
     """
     llm = _get_llm()
 
@@ -507,13 +560,15 @@ EVENT CONTEXT:
 
 URGENCY SCORE: {state.get('urgency_score', 0)}/10
 
-Your ONLY job is to draft one short RED ALERT message for the Organizer Dashboard.
+Your ONLY job is to draft one short, critical RED ALERT message for the
+Organizer Dashboard.  Do NOT send emails, SMS, or any notifications yourself.
 
-STRICT RULES:
-- Output exactly one plain-text line (no JSON, no markdown, no labels).
-- The line MUST start with "🚨".
-- The line MUST be under 100 characters.
-- No greetings, no filler, no conversational text.
+STRICT RULES — follow without exception:
+1. Output exactly ONE plain-text line.  No JSON, no markdown, no labels.
+2. The line MUST start with "🚨 CRITICAL ALERT: " (including the space after the colon).
+3. The TOTAL line length MUST be under 100 characters.
+4. No greetings, no filler, no conversational text.
+5. Be specific about the threat and its location / nature.
 """
 
     user_messages = [m for m in state["messages"] if isinstance(m, HumanMessage)]

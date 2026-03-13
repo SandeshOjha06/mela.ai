@@ -598,7 +598,7 @@ async def run_marketing_agent(
         generated = next(
             (m for m in log_messages if m.startswith("[Marketing_Agent]")),
             "",
-        ).replace("[Marketing_Agent] Drafted promotional content:\n", "", 1)
+        ).replace("[Marketing_Agent] Promotional Content Created", "", 1).strip()
 
         # Extract hourly engagement data from the result state
         hourly_engagement = result.get("hourly_engagement", [])
@@ -850,7 +850,7 @@ async def run_emergency_agent(
             "emergency_alert_message": "",
             "master_schedule": event.master_schedule or {},
             "budget_estimate_report": event.budget_report or {},
-            "direct_route": "",
+            "direct_route": "emergency_info",
             "marketing_prompt": "",
             "email_csv_data": [],
             "email_sample_template": "",

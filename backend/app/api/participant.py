@@ -216,6 +216,18 @@ async def report_issue(
             "emergency_alert_message": "",
             "master_schedule": event.master_schedule or {},
             "budget_estimate_report": event.budget_report or {},
+            # Required EventState fields — zero-value defaults for participant reports
+            "direct_route": "",
+            "marketing_prompt": "",
+            "marketing_post": "",
+            "marketing_platform": "twitter",
+            "marketing_sentiment": "Positive/High Energy",
+            "marketing_day": 0,
+            "hourly_engagement": [],
+            "email_csv_data": [],
+            "email_sample_template": "",
+            "schedule_prompt": "",
+            "schedule_time_constraints": {},
         }
 
         result = await swarm_graph.ainvoke(initial_state)
