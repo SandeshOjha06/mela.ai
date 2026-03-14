@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { Bell } from "lucide-react";
-import { playResolvedSound } from "../utils/sounds";
+
 
 const API = "/api/v1";
 
@@ -13,6 +12,8 @@ interface ChatMsg {
 
 interface ScheduleItem {
   time?: string;
+  start_time?: string;
+  end_time?: string;
   title?: string;
   session?: string;
   location?: string;
@@ -32,7 +33,7 @@ export default function ParticipantPortal() {
 
   // Chat
   const [messages, setMessages] = useState<ChatMsg[]>([
-    { role: "bot", text: "Hi! Ask me anything about the event — schedule, budget, rules, anything.", source: "system" },
+    { role: "bot", text: "Hi! Ask me anything about the event — schedule, venues, rules, or speakers.", source: "system" },
   ]);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
@@ -47,34 +48,13 @@ export default function ParticipantPortal() {
   // Participant count
   const [participantCount, setParticipantCount] = useState<number | null>(null);
 
-  // Notifications
-  const [notifications, setNotifications] = useState<any[]>([]);
-  const [showNotifications, setShowNotifications] = useState(false);
 
-  // Fetch resolved tickets
-  useEffect(() => {
-    if (!eventId) return;
-    const fetchResolved = async () => {
-      try {
-        const res = await fetch(`${API}/events/${eventId}/resolved_tickets`);
-        if (res.ok) {
-          const tickets = await res.json();
-          setNotifications(prev => {
-            if (tickets.length > prev.length && prev.length > 0) playResolvedSound();
-            return tickets;
-          });
-        }
-      } catch { /* silent */ }
-    };
-    fetchResolved();
-    const interval = setInterval(fetchResolved, 10000);
-    return () => clearInterval(interval);
-  }, [eventId]);
+
 
   // Fetch timeline
   useEffect(() => {
     if (!eventId) return;
-    (async () => {
+    const fetchTimeline = async () => {
       try {
         const res = await fetch(`${API}/events/${eventId}/timeline`);
         if (res.ok) {
@@ -96,7 +76,11 @@ export default function ParticipantPortal() {
         }
       } catch { /* silent */ }
       setLoadingTimeline(false);
-    })();
+    };
+
+    fetchTimeline(); // initial fetch
+    const interval = setInterval(fetchTimeline, 30000); // Poll every 30s
+    return () => clearInterval(interval);
   }, [eventId]);
 
   // Fetch participant count
@@ -228,41 +212,7 @@ export default function ParticipantPortal() {
           </div>
         )}
 
-        {/* Notifications */}
-        <div style={{ position: "relative" }}>
-          <button
-            onClick={() => setShowNotifications(s => !s)}
-            style={{ position: "relative", background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text2)", padding: "6px", borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
-          >
-            <Bell size={14} />
-            {notifications.length > 0 && (
-              <div style={{ position: "absolute", top: -2, right: -2, width: 8, height: 8, borderRadius: "50%", background: "var(--red)", border: "1px solid var(--surface)" }} title={`${notifications.length} Problems Resolved`} />
-            )}
-          </button>
 
-          {showNotifications && (
-            <div style={{
-              position: "absolute", top: "100%", right: 0, marginTop: 8, width: 320,
-              background: "var(--surface)", border: "1px solid var(--border)",
-              borderRadius: 8, padding: 12, zIndex: 100, boxShadow: "0 10px 30px rgba(0,0,0,0.5)"
-            }}>
-              <h3 style={{ margin: "0 0 12px 0", fontSize: 13, color: "var(--text)", fontWeight: 600 }}>Resolved Problems</h3>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 300, overflowY: "auto", paddingRight: 4 }}>
-                {notifications.length > 0 ? notifications.map((n, i) => (
-                  <div key={i} style={{ padding: 10, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 6 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                      <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--green)" }} />
-                      <span className="font-mono" style={{ fontSize: 10, color: "var(--green)", letterSpacing: "0.05em" }}>RESOLVED</span>
-                    </div>
-                    <div style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.5 }}>{n.issue_text}</div>
-                  </div>
-                )) : (
-                  <p style={{ fontSize: 12, color: "var(--text3)", margin: 0, fontStyle: "italic", textAlign: "center", padding: 20 }}>No resolved problems yet.</p>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
       </header>
 
       {/* ── Main content: Timeline (left) + Chatbot (right) ── */}
@@ -322,12 +272,12 @@ export default function ParticipantPortal() {
                   gap: 14,
                   alignItems: "flex-start",
                 }}>
-                  {item.time && (
+                  {(item.time || item.start_time) && (
                     <span className="font-mono" style={{
                       fontSize: 11, color: timelineColor,
                       minWidth: 72, flexShrink: 0, paddingTop: 2,
                     }}>
-                      {item.time}
+                      {item.time || (item.end_time ? `${item.start_time}–${item.end_time}` : item.start_time)}
                     </span>
                   )}
                   <div>
@@ -571,6 +521,8 @@ export default function ParticipantPortal() {
           </div>
         </div>
       )}
+
+
     </div>
   );
 }

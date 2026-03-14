@@ -18,6 +18,7 @@ const colorMap: Record<string, string> = {
     "agent-content": "hsl(160, 80%, 48%)",
     "agent-email": "hsl(270, 60%, 60%)",
     "agent-schedule": "hsl(35, 90%, 55%)",
+    "agent-budget": "hsl(200, 70%, 50%)",
 };
 
 /** Extract a human-readable string from each agent's specific response schema. */
@@ -33,11 +34,20 @@ function parseAgentOutput(colorVar: string, data: Record<string, unknown>): stri
     }
 
     if (colorVar === "agent-email") {
-        // EmailCampaignResult: recipients_count + logs
+        // EmailCampaignResult: recipients_count + category_reports + logs
         const count = data?.recipients_count as number;
+        const catReports = (data?.category_reports as Array<Record<string, unknown>>) || [];
         const logs = (data?.logs as string[]) || [];
         const parts: string[] = [];
         if (count !== undefined) parts.push(`✉️ Campaign sent to ${count} recipient(s).`);
+        if (catReports.length) {
+            parts.push("\n📊 Category Reports:");
+            catReports.forEach((r) => {
+                parts.push(`  • ${r.category || "Unknown"}: ${r.status || "N/A"} (${r.sent || 0}/${r.attempted || 0} sent)`);
+                if (r.subject) parts.push(`    Subject: ${r.subject}`);
+                if (r.message) parts.push(`    ${r.message}`);
+            });
+        }
         if (logs.length) parts.push("\n📋 Agent Logs:\n" + logs.map((l) => `  • ${l}`).join("\n"));
         return parts.join("\n") || JSON.stringify(data, null, 2);
     }
@@ -45,15 +55,43 @@ function parseAgentOutput(colorVar: string, data: Record<string, unknown>): stri
     if (colorVar === "agent-schedule") {
         // ScheduleAgentResult: master_schedule + logs
         const schedule = data?.master_schedule as Record<string, unknown>;
+        const parts: string[] = [];
+        if (schedule) {
+            const sessions = (schedule.sessions as Array<Record<string, unknown>>) || [];
+            if (sessions.length) {
+                parts.push("📅 Schedule:\n");
+                sessions.forEach((s) => {
+                    const startRaw = (s.start_time as string) || "";
+                    // Extract just the time portion (e.g., "08:00" from "2024-09-16 08:00")
+                    const timePart = startRaw.includes(" ") ? startRaw.split(" ")[1] : startRaw;
+                    const title = (s.title as string) || "Untitled";
+                    parts.push(`  ${timePart} - ${title}`);
+                });
+            } else {
+                // Fallback: schedule has keys but no sessions array
+                Object.entries(schedule).forEach(([k, v]) => {
+                    if (k !== "sessions" && k !== "last_updated" && k !== "conflicts_resolved") {
+                        parts.push(`  ${k}: ${typeof v === "object" ? JSON.stringify(v) : v}`);
+                    }
+                });
+            }
+        }
+        return parts.join("\n") || JSON.stringify(data, null, 2);
+    }
+
+    if (colorVar === "agent-budget") {
+        // BudgetAgentResult: budget_estimate_report + logs
+        const report = data?.budget_estimate_report as Record<string, unknown>;
         const logs = (data?.logs as string[]) || [];
         const parts: string[] = [];
-        if (schedule && Object.keys(schedule).length) {
-            parts.push("📅 Generated Schedule:\n" +
-                Object.entries(schedule).map(([k, v]) => `  ${k}: ${typeof v === "object" ? JSON.stringify(v) : v}`).join("\n")
-            );
+        if (report && Object.keys(report).length) {
+            parts.push("💰 Budget Report:");
+            Object.entries(report).map(([k, v]) => {
+                parts.push(`  ${k}: ${typeof v === "object" ? JSON.stringify(v) : v}`);
+            });
         }
         if (logs.length) parts.push("\n📋 Agent Logs:\n" + logs.map((l) => `  • ${l}`).join("\n"));
-        return parts.join("\n\n") || JSON.stringify(data, null, 2);
+        return parts.join("\n") || JSON.stringify(data, null, 2);
     }
 
     // Fallback
@@ -78,8 +116,9 @@ export function AgentPromptBox({ title, icon: Icon, colorVar, onBack, eventId }:
         "agent-content": "run_marketing",
         "agent-email": "run_email",
         "agent-schedule": "run_scheduler",
+        "agent-budget": "run_budget",
     };
-    const endpoint = endpointMap[colorVar] || "run_swarm";
+    const endpoint = endpointMap[colorVar] || "trigger_swarm";
 
     const handleRun = async () => {
         if (!prompt.trim()) return;
@@ -98,11 +137,13 @@ export function AgentPromptBox({ title, icon: Icon, colorVar, onBack, eventId }:
                 res = await axios.post(`${API}/organizer/events/${evId}/${endpoint}`, form, {
                     headers: { "Content-Type": "multipart/form-data" },
                 });
-            } else {
+            } else if (colorVar === "agent-budget") {
                 res = await axios.post(`${API}/organizer/events/${evId}/${endpoint}`, {
-                    prompt,
-                    event_id: Number(evId),
+                    request_description: prompt,
                 });
+            } else {
+                const payload = endpoint === "trigger_swarm" ? { command: prompt, event_id: Number(evId) } : { prompt, event_id: Number(evId) };
+                res = await axios.post(`${API}/organizer/events/${evId}/${endpoint}`, payload);
             }
             setResult(parseAgentOutput(colorVar, res.data as Record<string, unknown>));
         } catch (err: unknown) {

@@ -166,6 +166,7 @@ export default function HeroPage() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [mounted, setMounted] = useState<boolean>(false);
+  const [activeInfo, setActiveInfo] = useState<string | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => setMounted(true), 80);
@@ -258,11 +259,6 @@ export default function HeroPage() {
           position: "sticky", top: 0, zIndex: 100,
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{
-              width: 24, height: 24, borderRadius: 4,
-              background: "var(--green)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}></div>
             <span style={{
               fontWeight: 700,
               fontSize: 19, letterSpacing: "-0.5px", color: "var(--text)"
@@ -272,8 +268,54 @@ export default function HeroPage() {
           </div>
 
           <div style={{ display: "flex", gap: 36 }}>
-            {["Features", "How it works", "Agents"].map(l => (
-              <a key={l} href="#" className="nav-link">{l}</a>
+            {[
+              {
+                id: "Features",
+                info: "mela.ai allows you to automate event organization including email logistics, scheduling, budgeting, and social media posting. It provides an autonomous orchestration layer."
+              },
+              {
+                id: "How it works",
+                info: "You simply create an event and prompt the AI. The LangGraph-powered Swarm architecture spins up specialized agents (Logistics, Communications, Budget, Social) to handle the tasks autonomously."
+              },
+              {
+                id: "Agents",
+                info: "Our Swarm includes a Logistics Agent (scheduling, speakers), Communications Agent (emails, attendees), Budget Agent (cost tracking), and Social Media Agent (marketing drafts)."
+              }
+            ].map(l => (
+              <div key={l.id} style={{ position: 'relative' }} onMouseLeave={() => setActiveInfo(null)}>
+                <button
+                  className="nav-link"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                  onMouseEnter={() => setActiveInfo(l.id)}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setActiveInfo(activeInfo === l.id ? null : l.id);
+                  }}
+                >
+                  {l.id}
+                </button>
+                {activeInfo === l.id && (
+                  <div style={{
+                    position: "absolute",
+                    top: "100%",
+                    left: "50%",
+                    transform: "translateX(-50%)",
+                    marginTop: 12,
+                    width: 320,
+                    padding: 16,
+                    background: "var(--surface)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 8,
+                    boxShadow: "0 10px 30px rgba(0,0,0,0.5)",
+                    zIndex: 200,
+                    textAlign: "center"
+                  }}>
+                    <p style={{ fontSize: 13, color: "var(--text2)", margin: 0, lineHeight: 1.5, whiteSpace: 'normal', textAlign: 'left' }}>
+                      {l.info}
+                    </p>
+                  </div>
+                )}
+              </div>
             ))}
           </div>
 
@@ -313,7 +355,7 @@ export default function HeroPage() {
         {/* HERO */}
         <section style={{
           maxWidth: 1200, margin: "0 auto",
-          padding: "80px 48px 80px",
+          padding: "40px 48px 80px",
         }}>
 
           {/* Two column */}
@@ -335,17 +377,7 @@ export default function HeroPage() {
                 </span>
               </h1>
 
-              <p style={{
-                ...fadeUp(0.2),
-                fontSize: 14, color: "var(--text2)", lineHeight: 1.75,
-                maxWidth: 440, marginBottom: 36, margin: "0 auto",
-              }}>
-                One organizer. Four AI agents. Zero manual overhead.
-                mela.ai handles emails, scheduling, budgets and
-                social media — completely autonomously.
-              </p>
-
-              {/* Action Area: Button + Trust Signals */}
+              {/* Action Area: Button */}
               <div style={{
                 ...fadeUp(0.3),
                 display: "flex", flexDirection: "column", alignItems: "center", gap: 16, marginBottom: 32
@@ -353,39 +385,9 @@ export default function HeroPage() {
                 <button className="btn-primary" onClick={() => navigate(user ? '/dashboard' : "/login")}>
                   Launch mela.ai →
                 </button>
-
-                {/* Trust Signals / Micro-copy */}
-                <div style={{ display: "flex", alignItems: "center", gap: 16, justifyContent: "center" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ color: "var(--green)", fontSize: 13, fontWeight: "bold" }}>✓</span>
-                    <span style={{ color: "var(--text3)", fontSize: 13 }}>
-                      No credit card required
-                    </span>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ color: "var(--green)", fontSize: 13, fontWeight: "bold" }}>✓</span>
-                    <span style={{ color: "var(--text3)", fontSize: 13 }}>
-                      Setup in 5 minutes
-                    </span>
-                  </div>
-                </div>
               </div>
 
-              {/* Powered by */}
-              <div style={{
-                ...fadeUp(0.5),
-                display: "inline-flex", alignItems: "center", gap: 8,
-                background: "var(--surface)",
-                border: "1px solid var(--border)",
-                borderRadius: 4, padding: "6px 12px",
-              }}>
-                <span style={{
-                  fontSize: 10, color: "var(--text3)",
-                }}>POWERED BY</span>
-                <span style={{
-                  fontSize: 11, fontWeight: 700, color: "var(--text)",
-                }}>LANGGRAPH</span>
-              </div>
+
 
             </div>
 
@@ -397,26 +399,7 @@ export default function HeroPage() {
             }}>
               <LiveLog />
 
-              <div style={{
-                marginTop: 14,
-                display: "flex", alignItems: "center",
-                justifyContent: "center", gap: 8,
-                background: "var(--lime10)",
-                border: "1px solid var(--border)",
-                borderRadius: 8, padding: "10px 20px",
-              }}>
-                <span style={{ fontSize: 11, color: "var(--text3)" }}>
-                  powered by
-                </span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text2)" }}>
-                  LangGraph + Llama 3
-                </span>
-                <span style={{
-                  width: 6, height: 6, borderRadius: "50%",
-                  background: "var(--green)", display: "inline-block",
-                  animation: "pulse 2s infinite",
-                }} />
-              </div>
+
             </div>
 
           </div>

@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Zap, Settings, Users, ArrowRight, LogOut, Home } from 'lucide-react';
+import { ArrowRight, LogOut, Home, Zap, Users } from 'lucide-react';
 
 const Dashboard: React.FC = () => {
   const { logout, user } = useAuth();
@@ -27,7 +27,6 @@ const Dashboard: React.FC = () => {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--lime10)', border: '1px solid var(--lime35)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Zap size={14} color="var(--green)" />
           </div>
           <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-0.01em' }}>mela.ai</span>
         </div>
@@ -49,7 +48,7 @@ const Dashboard: React.FC = () => {
       </header>
 
       {/* Main Content */}
-      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '80px 24px' }}>
+      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '40px 24px' }}>
         <h1 style={{ fontSize: 32, fontWeight: 600, marginBottom: 12, color: 'var(--text)' }}>Welcome to mela.ai</h1>
         <p style={{ fontSize: 14, color: 'var(--text3)', marginBottom: 48, maxWidth: 400, textAlign: 'center' }}>
           Select how you want to interact with the platform. You can host your own event or join an existing one.
@@ -84,8 +83,20 @@ const Dashboard: React.FC = () => {
             onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--green)'}
             onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--border)'}
           >
-            <div style={{ width: 48, height: 48, borderRadius: 12, background: 'rgba(255, 170, 0, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
-              <Settings size={24} color="var(--amber)" />
+            <div style={{ width: 64, height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
+              {/* Two figures side-hugging / collaborating */}
+              <svg width="56" height="56" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                {/* Left person */}
+                <circle cx="22" cy="16" r="6" fill="var(--amber)" opacity="0.85"/>
+                <path d="M14 32c0-4.4 3.6-8 8-8s8 3.6 8 8v10a2 2 0 01-2 2H16a2 2 0 01-2-2V32z" fill="var(--amber)" opacity="0.55"/>
+                {/* Right person */}
+                <circle cx="42" cy="16" r="6" fill="var(--green)" opacity="0.85"/>
+                <path d="M34 32c0-4.4 3.6-8 8-8s8 3.6 8 8v10a2 2 0 01-2 2H36a2 2 0 01-2-2V32z" fill="var(--green)" opacity="0.55"/>
+                {/* Hug / link arm */}
+                <path d="M28 30c2 4 6 4 8 0" stroke="var(--text3)" strokeWidth="2" strokeLinecap="round" opacity="0.5"/>
+                {/* Heart above */}
+                <path d="M32 8c-1-2-4-2-4 0s3 4 4 5c1-1 4-3 4-5s-3-2-4 0z" fill="#ff6b8a" opacity="0.7"/>
+              </svg>
             </div>
             <h2 style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>Co-Organize</h2>
             <p style={{ fontSize: 13, color: 'var(--text3)', margin: 0, lineHeight: 1.5, flex: 1 }}>

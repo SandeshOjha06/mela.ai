@@ -25,9 +25,6 @@ export function EventSidebar() {
             <SidebarContent className="pt-4">
                 {/* Brand */}
                 <div className="px-4 pb-4 flex items-center gap-2">
-                    <div className="h-8 w-8 rounded-lg bg-primary/20 flex items-center justify-center shrink-0">
-                        <Zap className="h-4 w-4 text-primary" />
-                    </div>
                     <span className="text-sm font-semibold tracking-tight text-foreground">mela.ai</span>
                 </div>
 

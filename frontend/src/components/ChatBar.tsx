@@ -31,12 +31,22 @@ export function ChatBar({ eventId, isExpanded, setExpanded, onInputChange }: { e
 
         try {
             const evId = eventId || "1";
-            const res = await axios.post(`/api/v1/organizer/events/${evId}/run_emergency`, {
-                problem_description: promptText
+            const res = await axios.post(`/api/v1/organizer/events/${evId}/trigger_swarm`, {
+                command: promptText
             });
             const data = res.data;
-            const output = data?.emergency_alert_message
-                || (data?.logs?.length ? data.logs.join("\n") : "Emergency handled by mela.ai.");
+            let output = data?.logs?.length ? data.logs.join("\n") : "Task handled by mela.ai.";
+
+            if (data?.state?.problem_category) {
+                const category = data.state.problem_category.toLowerCase();
+                if (category === "emergency" || category === "urgent") {
+                    output = "The problem is emergency, show alert";
+                } else if (category === "budget" || category === "reschedule" || category === "logistics") {
+                    output = `The problem is ${category}. Fixed, as the agents have fixed it themselves.`;
+                } else if (category === "human_escalation" || category === "human" || category === "escalate") {
+                    output = "The problem requires human intervention. Your problem is sent to the organizing committee.";
+                }
+            }
 
             setMessages((prev) => [
                 ...prev,

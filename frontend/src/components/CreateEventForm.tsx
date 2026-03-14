@@ -6,12 +6,13 @@ interface CreateEventFormProps {
     onSuccess: (event: any) => void;
 }
 
-const eventTypes = ["Hackathon", "Conference", "Workshop", "Sprint", "Tournament"];
+
 
 export const CreateEventForm = ({ onSuccess }: CreateEventFormProps) => {
     const [eventName, setEventName] = useState("");
     const [organizerName, setOrganizerName] = useState("");
     const [eventType, setEventType] = useState("");
+    const [budget, setBudget] = useState("");
     const [rules, setRules] = useState("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
@@ -41,7 +42,7 @@ export const CreateEventForm = ({ onSuccess }: CreateEventFormProps) => {
                 event_name: eventName,
                 organizer_name: organizerName || "Organizer",
                 event_rules_and_context: combinedRules,
-                total_budget_allocated: 0,
+                total_budget_allocated: budget ? parseFloat(budget) : 0,
                 master_schedule: {},
                 budget_report: {},
             });
@@ -181,32 +182,58 @@ export const CreateEventForm = ({ onSuccess }: CreateEventFormProps) => {
                     />
                 </div>
 
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                     <label style={{ fontSize: 11, fontFamily: "'JetBrains Mono', monospace", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text2)" }}>
                         Event Type
                     </label>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                        {eventTypes.map(type => (
-                            <button
-                                key={type}
-                                type="button"
-                                onClick={() => setEventType(t => t === type ? "" : type)}
-                                style={{
-                                    padding: "6px 14px",
-                                    borderRadius: 20,
-                                    fontSize: 12,
-                                    background: eventType === type ? "rgba(29, 158, 117, 0.1)" : "transparent",
-                                    color: eventType === type ? "#1D9E75" : "var(--text2)",
-                                    border: eventType === type ? "1px solid #1D9E75" : "1px solid var(--border)",
-                                    cursor: "pointer",
-                                    transition: "all 0.2s",
-                                    fontFamily: "inherit"
-                                }}
-                            >
-                                {type}
-                            </button>
-                        ))}
-                    </div>
+                    <input
+                        type="text"
+                        value={eventType}
+                        onChange={(e) => setEventType(e.target.value)}
+                        style={{
+                            width: "100%",
+                            background: "var(--bg)",
+                            border: "1px solid var(--border)",
+                            color: "#fff",
+                            padding: "12px 16px",
+                            fontSize: 14,
+                            borderRadius: 8,
+                            fontFamily: "inherit",
+                            outline: "none",
+                            transition: "all 0.2s"
+                        }}
+                        onFocus={(e) => (e.target.style.background = "var(--surface2)")}
+                        onBlur={(e) => (e.target.style.background = "var(--bg)")}
+                        placeholder="e.g. Hackathon, Conference, Workshop, Sprint..."
+                    />
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    <label style={{ fontSize: 11, fontFamily: "'JetBrains Mono', monospace", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text2)" }}>
+                        Budget ($)
+                    </label>
+                    <input
+                        type="number"
+                        value={budget}
+                        onChange={(e) => setBudget(e.target.value)}
+                        style={{
+                            width: "100%",
+                            background: "var(--bg)",
+                            border: "1px solid var(--border)",
+                            color: "#fff",
+                            padding: "12px 16px",
+                            fontSize: 14,
+                            borderRadius: 8,
+                            fontFamily: "inherit",
+                            outline: "none",
+                            transition: "all 0.2s"
+                        }}
+                        onFocus={(e) => (e.target.style.background = "var(--surface2)")}
+                        onBlur={(e) => (e.target.style.background = "var(--bg)")}
+                        placeholder="e.g. 5000"
+                        min="0"
+                        step="0.01"
+                    />
                 </div>
 
                 <div style={{ height: 1, background: "var(--border)", margin: "8px 0" }} />
