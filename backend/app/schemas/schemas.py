@@ -19,6 +19,7 @@ class EventBase(BaseModel):
     """Base schema for event data."""
     event_name: str = Field(..., max_length=255, description="Name of the event")
     organizer_name: str = Field(..., max_length=255, description="Name of the organizer")
+    organizer_email: Optional[str] = Field(default="", max_length=255, description="Organizer's email — used as Reply-To on participant emails")
     event_rules_and_context: str = Field(default="", description="Rules and context injected into agent prompts")
     total_budget_allocated: float = Field(default=0.0, ge=0, description="Total budget for the event")
     master_schedule: dict[str, Any] = Field(default_factory=dict, description="Master schedule as JSON")
@@ -33,6 +34,10 @@ class EventCreate(EventBase):
 class EventResponse(EventBase):
     """Schema for event API responses."""
     event_id: int
+    participant_code: str = Field(description="Participant join code to share with attendees")
+    participant_join_link: str = Field(description="Frontend participant join URL")
+    organizer_code: str = Field(description="Organizer-team join code to share with co-organizers")
+    organizer_join_link: str = Field(description="Frontend organizer-team join URL")
 
     model_config = {"from_attributes": True}
 
@@ -259,9 +264,12 @@ class EventCodeResponse(BaseModel):
     GET /organizer/events/{event_id}/code endpoint.
     """
     event_id: int
-    code: str = Field(description="Shareable join code, e.g. NEU-2026-7X3K")
+    code: str = Field(description="Participant join code, e.g. NEU-2026-7X3K")
     join_link: str = Field(description="Full frontend URL to share with participants")
     created_at: datetime
+    organizer_code: str = Field(description="Organizer-team join code")
+    organizer_join_link: str = Field(description="Full frontend URL to share with organizer team")
+    organizer_created_at: datetime
  
     model_config = {"from_attributes": True}
  
@@ -282,6 +290,22 @@ class JoinEventResponse(BaseModel):
     event_name: str
     organizer_name: str
     master_schedule: dict[str, Any]
+    message: str
+
+
+class OrganizerTeamJoinRequest(BaseModel):
+    """Request body for an organizer-team member joining via organizer code."""
+    code: str = Field(..., min_length=3, max_length=20, description="Organizer-team join code")
+    email: str = Field(..., max_length=255, description="Organizer member email")
+    name: Optional[str] = Field(None, max_length=255, description="Organizer member name")
+
+
+class OrganizerTeamJoinResponse(BaseModel):
+    """Response after an organizer-team member successfully joins an event."""
+    event_id: int
+    event_name: str
+    organizer_name: str
+    team_member_count: int
     message: str
 
 

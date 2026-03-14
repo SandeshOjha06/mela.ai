@@ -2,7 +2,8 @@
 SQLAlchemy ORM models for the Event Command Center.
 
 Defines the relational schema: Events, Participants, Tickets,
-UnresolvedQueries, SwarmLogs, and EventCodes — all scoped by
+UnresolvedQueries, SwarmLogs, participant EventCodes,
+OrganizerCodes, and OrganizerTeamMembers — all scoped by
 event_id for multi-tenant isolation.
 """
 
@@ -18,6 +19,7 @@ from sqlalchemy import (
     JSON,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import DeclarativeBase, relationship
 
@@ -33,6 +35,7 @@ class Event(Base):
     event_id = Column(Integer, primary_key=True, autoincrement=True)
     event_name = Column(String(255), nullable=False)
     organizer_name = Column(String(255), nullable=False)
+    organizer_email = Column(String(255), nullable=True, default="")
     event_rules_and_context = Column(Text, nullable=True, default="")
     total_budget_allocated = Column(Float, nullable=False, default=0.0)
     status = Column(String(50), nullable=False, default="active")
@@ -44,7 +47,9 @@ class Event(Base):
     tickets = relationship("Ticket", back_populates="event", cascade="all, delete-orphan")
     unresolved_queries = relationship("UnresolvedQuery", back_populates="event", cascade="all, delete-orphan")
     swarm_logs = relationship("SwarmLog", back_populates="event", cascade="all, delete-orphan")
-    event_code = relationship("EventCode", back_populates="event", uselist=False, cascade="all, delete-orphan")
+    participant_code = relationship("EventCode", back_populates="event", uselist=False, cascade="all, delete-orphan")
+    organizer_code = relationship("OrganizerCode", back_populates="event", uselist=False, cascade="all, delete-orphan")
+    organizer_team_members = relationship("OrganizerTeamMember", back_populates="event", cascade="all, delete-orphan")
 
     # Agent-specific log relationships
     swarm_interaction_logs = relationship("SwarmInteractionLog", back_populates="event", cascade="all, delete-orphan")
@@ -113,7 +118,34 @@ class EventCode(Base):
     code = Column(String(20), nullable=False, unique=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
 
-    event = relationship("Event", back_populates="event_code")
+    event = relationship("Event", back_populates="participant_code")
+
+
+class OrganizerCode(Base):
+    __tablename__ = "organizer_codes"
+
+    code_id = Column(Integer, primary_key=True, autoincrement=True)
+    event_id = Column(Integer, ForeignKey("events.event_id", ondelete="CASCADE"), nullable=False, unique=True)
+    code = Column(String(20), nullable=False, unique=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    event = relationship("Event", back_populates="organizer_code")
+
+
+class OrganizerTeamMember(Base):
+    __tablename__ = "organizer_team_members"
+    __table_args__ = (
+        UniqueConstraint("event_id", "email", name="uq_organizer_team_member_event_email"),
+    )
+
+    member_id = Column(Integer, primary_key=True, autoincrement=True)
+    event_id = Column(Integer, ForeignKey("events.event_id", ondelete="CASCADE"), nullable=False)
+    name = Column(String(255), nullable=False)
+    email = Column(String(255), nullable=False)
+    role = Column(String(50), nullable=False, default="member")
+    joined_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    event = relationship("Event", back_populates="organizer_team_members")
 
 
 # ---------------------------------------------------------------------------

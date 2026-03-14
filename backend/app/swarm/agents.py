@@ -558,6 +558,8 @@ Output ONLY the JSON object — no preamble, no explanation, no markdown fences.
             recipients=segment_recipients,
             subject=subject,
             body=body,
+            display_name=f"{event_name} Team",
+            reply_to=state.get("organizer_email", ""),
         )
         delivery_results.append({
             "segment": segment_name,

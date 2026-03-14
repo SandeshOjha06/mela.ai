@@ -40,6 +40,8 @@ def send_bulk_email(
     recipients: list[str],
     subject: str,
     body: str,
+    display_name: str = "",
+    reply_to: str = "",
 ) -> dict[str, Any]:
     """
     Send real emails via Gmail SMTP.
@@ -48,18 +50,27 @@ def send_bulk_email(
     Falls back to mock mode if credentials are not configured.
 
     Args:
-        event_id: The tenant event identifier.
-        recipients: List of recipient email addresses.
-        subject: Email subject line.
-        body: Email body content.
+        event_id:     The tenant event identifier.
+        recipients:   List of recipient email addresses.
+        subject:      Email subject line.
+        body:         Email body content.
+        display_name: Friendly sender name shown in the inbox
+                      (e.g. "Mechtrix 2026 Team"). Defaults to SMTP_USER.
+        reply_to:     Address where participant replies should land
+                      (typically the organizer's personal email).
 
     Returns:
         A dict with delivery status and count.
     """
-    from app.config import settings
+    from app.config import Settings
+    from email.utils import formataddr
 
-    smtp_user = settings.SMTP_USER
-    smtp_password = settings.SMTP_APP_PASSWORD
+    runtime_settings = Settings()
+    smtp_user = runtime_settings.SMTP_USER.strip()
+    smtp_password = runtime_settings.SMTP_APP_PASSWORD.strip()
+
+    # Build the branded From address:  "Mechtrix 2026 Team <smtp_user@gmail.com>"
+    from_header = formataddr((display_name or smtp_user, smtp_user)) if smtp_user else ""
 
     # Fall back to mock if credentials not set
     if not smtp_user or not smtp_password:
@@ -84,9 +95,11 @@ def send_bulk_email(
             for recipient in recipients:
                 try:
                     msg = MIMEMultipart("alternative")
-                    msg["From"] = smtp_user
+                    msg["From"] = from_header
                     msg["To"] = recipient
                     msg["Subject"] = subject
+                    if reply_to:
+                        msg["Reply-To"] = reply_to
 
                     # Attach both plain text and HTML versions
                     msg.attach(MIMEText(body, "plain"))

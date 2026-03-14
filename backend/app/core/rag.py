@@ -116,3 +116,74 @@ def add_to_rag(event_id: int, question: str, answer: str) -> str:
     )
 
     return doc_id
+
+
+# ---------------------------------------------------------------------------
+# RAG Sync — PostgreSQL → ChromaDB
+# ---------------------------------------------------------------------------
+
+def sync_event_data_to_rag(
+    event_id: int,
+    event_name: str,
+    organizer: str,
+    rules: str,
+    schedule: dict,
+) -> int:
+    """
+    Extract meaningful data (rules & schedule) from PostgreSQL and upsert
+    it into ChromaDB as human-readable semantic chunks.
+
+    Each chunk is stored with a deterministic ID so re-running this
+    function on the same event is fully idempotent (upsert = insert-or-replace).
+
+    Call this:
+      - When an event is first created.
+      - Whenever the master_schedule is updated by the Scheduler Agent.
+
+    Returns the number of chunks written to ChromaDB.
+    """
+    collection = get_collection()
+
+    ids: list[str] = []
+    documents: list[str] = []
+    metadatas: list[dict] = []
+
+    # ── 1. General event info & rules chunk ─────────────────────────────────
+    general_doc = (
+        f"Event Name: {event_name}\n"
+        f"Organizer: {organizer}\n"
+        f"General Rules and Context:\n{rules or 'No specific rules provided.'}"
+    )
+    ids.append(f"event_{event_id}_general_info")
+    documents.append(general_doc)
+    metadatas.append({"event_id": str(event_id), "source": "postgres_general"})
+
+    # ── 2. Master schedule — one chunk per session ───────────────────────────
+    if schedule and "sessions" in schedule:
+        for index, session in enumerate(schedule["sessions"]):
+            title   = session.get("title",    "Unknown Session")
+            start   = session.get("start_time", "TBD")
+            end     = session.get("end_time",   "TBD")
+            venue   = session.get("venue",      "TBD")
+            speaker = session.get("speaker",    "TBD")
+            notes   = session.get("notes",      "")
+
+            session_doc = (
+                f"Session Title: {title}\n"
+                f"Speaker: {speaker}\n"
+                f"Time: {start} to {end}\n"
+                f"Location/Venue: {venue}\n"
+                f"Notes: {notes}"
+            )
+            ids.append(f"event_{event_id}_session_{index}")
+            documents.append(session_doc)
+            metadatas.append({
+                "event_id": str(event_id),
+                "source": "postgres_schedule",
+                "session_title": title,
+            })
+
+    if ids:
+        collection.upsert(ids=ids, documents=documents, metadatas=metadatas)
+
+    return len(ids)

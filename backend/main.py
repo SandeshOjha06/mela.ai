@@ -25,6 +25,33 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+async def _apply_schema_patches() -> None:
+    """
+    Apply lightweight, backward-compatible schema patches.
+
+    SQLAlchemy create_all creates missing tables but does not alter existing
+    tables, so older databases may miss newly added columns.
+    """
+    async with engine.begin() as conn:
+        dialect = conn.dialect.name
+
+        if dialect == "postgresql":
+            await conn.execute(text(
+                """
+                ALTER TABLE IF EXISTS events
+                ADD COLUMN IF NOT EXISTS organizer_email VARCHAR(255) DEFAULT '';
+                """
+            ))
+        elif dialect == "sqlite":
+            # SQLite has no robust ALTER TABLE IF NOT EXISTS for columns.
+            result = await conn.execute(text("PRAGMA table_info(events)"))
+            existing_columns = {row[1] for row in result.fetchall()}
+            if "organizer_email" not in existing_columns:
+                await conn.execute(text(
+                    "ALTER TABLE events ADD COLUMN organizer_email VARCHAR(255) DEFAULT ''"
+                ))
+
+
 # ---------------------------------------------------------------------------
 # Lifespan — startup & shutdown
 # ---------------------------------------------------------------------------
@@ -50,9 +77,11 @@ async def lifespan(app: FastAPI):
             await session.execute(text("SELECT 1"))
         logger.info("✅ PostgreSQL (Neon) connection verified.")
     except Exception as e:
-        logger.error(f"❌ Database connection failed: {e}")
-        logger.error("   Check your DATABASE_URL in .env and that Neon is reachable.")
-        raise  # Fail fast — don't start the server with a broken DB
+        # Neon free tier auto-suspends after inactivity and may timeout on
+        # first connect. Log a warning but let the server start — Neon will
+        # auto-wake on the first real request (typically within 2-3 seconds).
+        logger.warning(f"⚠️  Database ping failed at startup (Neon may be waking up): {e}")
+        logger.warning("   Server starting anyway — DB will reconnect on first request.")
 
     # ── Create database tables ───────────────────────────────────────────────
     try:
@@ -61,6 +90,14 @@ async def lifespan(app: FastAPI):
         logger.info("✅ Database tables created/verified.")
     except Exception as e:
         logger.error(f"❌ Table creation failed: {e}")
+        raise
+
+    # ── Apply schema patches for existing deployments ───────────────────────
+    try:
+        await _apply_schema_patches()
+        logger.info("✅ Schema patch check complete.")
+    except Exception as e:
+        logger.error(f"❌ Schema patch failed: {e}")
         raise
 
     # ── Initialize ChromaDB ──────────────────────────────────────────────────

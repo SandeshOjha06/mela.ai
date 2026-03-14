@@ -5,7 +5,9 @@ Loads environment variables from a .env file and provides typed access
 to all configuration parameters needed by the application.
 """
 
-from pydantic_settings import BaseSettings
+from pathlib import Path
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -27,11 +29,30 @@ class Settings(BaseSettings):
     SMTP_USER: str = ""          # e.g. yourname@gmail.com
     SMTP_APP_PASSWORD: str = ""  # Gmail App Password (not your regular password)
 
-    model_config = {
-        "env_file": ".env",
-        "env_file_encoding": "utf-8",
-        "case_sensitive": True,
-    }
+    # Always read backend/.env, even when the process is launched from repo root.
+    model_config = SettingsConfigDict(
+        env_file=str(Path(__file__).resolve().parents[1] / ".env"),
+        env_file_encoding="utf-8",
+        case_sensitive=True,
+    )
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls,
+        init_settings,
+        env_settings,
+        dotenv_settings,
+        file_secret_settings,
+    ):
+        # Prefer .env over shell-exported vars to avoid stale SMTP values
+        # from older terminal sessions taking precedence.
+        return (
+            init_settings,
+            dotenv_settings,
+            env_settings,
+            file_secret_settings,
+        )
 
 
 # Singleton settings instance

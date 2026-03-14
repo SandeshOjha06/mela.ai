@@ -18,6 +18,7 @@ from app.db.models import (
     EmergencyLog,
     Event,
     MarketingLog,
+    OrganizerTeamMember,
     Participant,
     SchedulerLog,
     SwarmInteractionLog,
@@ -303,6 +304,53 @@ async def get_participant_by_email(
         )
     )
     return result.scalar_one_or_none()
+
+
+# ---------------------------------------------------------------------------
+# Organizer Team CRUD
+# ---------------------------------------------------------------------------
+
+async def get_organizer_members_by_event(
+    db: AsyncSession, event_id: int
+) -> Sequence[OrganizerTeamMember]:
+    """Fetch all organizer team members registered under the given event."""
+    result = await db.execute(
+        select(OrganizerTeamMember).where(OrganizerTeamMember.event_id == event_id)
+    )
+    return result.scalars().all()
+
+
+async def get_organizer_member_by_email(
+    db: AsyncSession, event_id: int, email: str
+) -> OrganizerTeamMember | None:
+    """Check if an organizer team member with the given email exists for the event."""
+    result = await db.execute(
+        select(OrganizerTeamMember).where(
+            OrganizerTeamMember.event_id == event_id,
+            OrganizerTeamMember.email == email,
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def create_organizer_member(
+    db: AsyncSession,
+    event_id: int,
+    name: str,
+    email: str,
+    role: str = "member",
+) -> OrganizerTeamMember:
+    """Register a new organizer team member for the given event."""
+    member = OrganizerTeamMember(
+        event_id=event_id,
+        name=name,
+        email=email,
+        role=role,
+    )
+    db.add(member)
+    await db.commit()
+    await db.refresh(member)
+    return member
 
 
 # ---------------------------------------------------------------------------

@@ -52,6 +52,9 @@ class EventState(TypedDict):
     # and routes to this agent first. Used by dedicated agent endpoints.
     direct_route: str
 
+    # Organizer contact — used for Reply-To on outbound participant emails
+    organizer_email: str
+
     # Marketing agent: user's raw promotional prompt
     marketing_prompt: str
     

@@ -149,39 +149,33 @@ async def chat_with_rag(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Context-aware RAG Chatbot endpoint.
+    Context-aware RAG Chatbot endpoint for Participants.
 
-    Combines event data from PostgreSQL (budget, schedule, rules) with
-    any resolved Q&A from ChromaDB, then uses the LLM to generate a
-    natural-language answer grounded in real event context.
+    Queries ChromaDB (which now contains synced schedule + rules chunks)
+    for the best matching answer, then asks the LLM to form a clean
+    natural-language response.
 
-    Falls back to organizer escalation only when neither source helps.
+    SECURE: Budget data and internal financial info are never exposed.
     """
     try:
         event = await crud.get_event_context(db, event_id)
         if event is None:
             raise HTTPException(status_code=404, detail=f"Event {event_id} not found.")
 
-        # ── 1. Build context from PostgreSQL ─────────────────────────────
-        import json as _json
-        schedule_str = _json.dumps(event.master_schedule, indent=2) if event.master_schedule else "No schedule available."
-        budget_str = _json.dumps(event.budget_report, indent=2) if event.budget_report else "No budget information available."
-
-        pg_context = f"""EVENT NAME: {event.event_name}
-ORGANIZER: {event.organizer_name}
-RULES & CONTEXT: {event.event_rules_and_context or "No specific rules."}
-TOTAL BUDGET: {event.total_budget_allocated}
-MASTER SCHEDULE: {schedule_str}
-BUDGET REPORT: {budget_str}"""
-
-        # ── 2. Query ChromaDB for resolved Q&A ──────────────────────────
+        # ── 1. Query ChromaDB for any matching data (rules, schedule, QA) ──
+        # Since we sync Postgres data to Chroma on create/update, it will
+        # find the exact session or rule without needing raw JSON in the prompt.
         rag_answer, rag_confidence = query_rag(event_id=event_id, question=request.question)
+
+        # ── 2. Build safe minimal context (budget NEVER included) ────────────
+        pg_context = f"""EVENT NAME: {event.event_name}
+ORGANIZER: {event.organizer_name}"""
 
         rag_section = ""
         if rag_answer and rag_confidence >= 0.5:
-            rag_section = f"\n\nPREVIOUSLY RESOLVED Q&A (confidence {rag_confidence}):\n{rag_answer}"
+            rag_section = f"\n\nRETRIEVED KNOWLEDGE BASE RESULTS:\n{rag_answer}"
 
-        # ── 3. Ask LLM to answer using combined context ─────────────────
+        # ── 3. Ask LLM to answer using safe context ─────────────────────────
         from langchain_groq import ChatGroq
         from langchain_core.messages import SystemMessage as _Sys, HumanMessage as _Hum
         from app.config import settings
@@ -192,10 +186,9 @@ BUDGET REPORT: {budget_str}"""
             temperature=0.3,
         )
 
-        system_prompt = f"""You are a helpful Q&A assistant for participants of an event.
-Answer the participant's question using ONLY the event information provided below.
-If the information is not available in the context, say so honestly.
-Be concise, friendly, and direct. Do NOT make up information.
+        system_prompt = f"""You are a helpful and polite Q&A assistant for participants of '{event.event_name}'.
+Answer the participant's question using ONLY the provided knowledge base context below.
+If the context does not contain the answer, say so honestly. Do NOT make up schedules, rules, or locations.
 
 {pg_context}{rag_section}"""
 
@@ -206,17 +199,15 @@ Be concise, friendly, and direct. Do NOT make up information.
 
         answer_text = response.content.strip()
 
-        # ── 4. Determine confidence ─────────────────────────────────────
-        # If the LLM says it doesn't know, treat as low confidence
+        # ── 4. Determine confidence & escalation ─────────────────────────────
         no_answer_phrases = [
             "not available", "don't have", "no information",
             "cannot find", "not provided", "not mentioned",
-            "i'm not sure", "i don't know",
+            "i'm not sure", "i don't know", "does not contain",
         ]
         is_uncertain = any(phrase in answer_text.lower() for phrase in no_answer_phrases)
 
-        if is_uncertain:
-            # Save as unresolved for the organizer to answer
+        if is_uncertain or rag_confidence < 0.4:
             await crud.create_unresolved_query(
                 db=db,
                 event_id=event_id,
@@ -224,8 +215,7 @@ Be concise, friendly, and direct. Do NOT make up information.
             )
             return ChatResponse(
                 answer=(
-                    f"{answer_text}\n\nYour question has been forwarded to the "
-                    "event organizers for a detailed response."
+                    "I don't have that info right now — your question has been forwarded to the organizers!"
                 ),
                 confidence=0.3,
                 source="fallback",

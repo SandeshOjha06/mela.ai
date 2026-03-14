@@ -13,11 +13,13 @@ A scalable, multi-tenant backend for a General-Purpose Autonomous Event Command 
 ## Setup
 
 1. **Clone and install dependencies:**
+
    ```bash
    pip install -r requirements.txt
    ```
 
 2. **Configure environment:**
+
    ```bash
    cp .env.example .env
    # Edit .env with your actual credentials
@@ -26,6 +28,7 @@ A scalable, multi-tenant backend for a General-Purpose Autonomous Event Command 
 3. **Ensure PostgreSQL is running** and the database exists.
 
 4. **Start the server:**
+
    ```bash
    uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
    ```
@@ -36,25 +39,31 @@ A scalable, multi-tenant backend for a General-Purpose Autonomous Event Command 
 
 The system uses a **Star Topology Swarm** with a Supervisor orchestrating 6 specialized agents:
 
-| Agent | Role |
-|---|---|
+| Agent          | Role                                |
+| -------------- | ----------------------------------- |
 | Problem Solver | Classifies issues & assigns urgency |
-| Marketing | Drafts promotional content |
-| Scheduler | Resolves schedule conflicts |
-| Email | Sends bulk notifications |
-| Emergency Info | Crisis management alerts |
-| Budget Finance | Financial breakdown analysis |
+| Marketing      | Drafts promotional content          |
+| Scheduler      | Resolves schedule conflicts         |
+| Email          | Sends bulk notifications            |
+| Emergency Info | Crisis management alerts            |
+| Budget Finance | Financial breakdown analysis        |
 
 All operations are **multi-tenant** — every request is scoped by `event_id` to ensure complete data isolation.
 
 ## API Endpoints
 
 ### Participant-Facing
+
+- `POST /api/v1/events/join`
 - `GET  /api/v1/events/{event_id}/timeline`
 - `POST /api/v1/events/{event_id}/chat`
 - `POST /api/v1/events/{event_id}/report`
 
 ### Organizer-Facing
+
+- `POST /api/v1/organizer/events`
+- `POST /api/v1/organizer/events/join-team`
+- `GET  /api/v1/organizer/events/{event_id}/code`
 - `POST /api/v1/organizer/events/{event_id}/trigger_swarm`
 - `POST /api/v1/organizer/events/{event_id}/resolve_query`
 - `GET  /api/v1/organizer/events/{event_id}/priority_queue`
