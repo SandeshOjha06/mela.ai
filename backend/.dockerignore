@@ -1,0 +1,12 @@
+.venv
+venv
+__pycache__
+*.pyc
+.env
+chroma_data
+.git
+*.md
+fix_db.py
+patch_db.py
+query_logs.py
+test_emergency.py

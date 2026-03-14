@@ -5,10 +5,14 @@ ChromaDB initialization), mounts participant and organizer routers
 under /api/v1/, and configures CORS middleware.
 """
 import logging
+import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from starlette.responses import FileResponse
 from sqlalchemy import text
 
 from app.api.auth import router as auth_router
@@ -210,3 +214,23 @@ async def db_health_check():
             "connection": "failed",
             "error": str(e),
         }
+
+
+# ---------------------------------------------------------------------------
+# Serve React SPA in production (Docker)
+# ---------------------------------------------------------------------------
+
+_STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+if _STATIC_DIR.is_dir():
+    # Serve static assets (JS, CSS, images) from the Vite build
+    app.mount("/assets", StaticFiles(directory=_STATIC_DIR / "assets"), name="assets")
+
+    # Catch-all: serve index.html for any non-API route (SPA client routing)
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_spa(full_path: str):
+        """Fallback to index.html for client-side routing."""
+        file_path = _STATIC_DIR / full_path
+        if file_path.is_file():
+            return FileResponse(file_path)
+        return FileResponse(_STATIC_DIR / "index.html")

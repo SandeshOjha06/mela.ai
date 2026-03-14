@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { GoogleLogin, type CredentialResponse } from '@react-oauth/google';
-import { Zap, AlertCircle, Loader2, Eye, EyeOff, ArrowLeft } from 'lucide-react';
+import { AlertCircle, Loader2, Eye, EyeOff, ArrowLeft } from 'lucide-react';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -84,11 +84,11 @@ const Login: React.FC = () => {
             background: 'var(--lime10)', border: '1px solid var(--lime35)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             boxShadow: '0 0 20px rgba(29,158,117,0.2)',
-          }}>
-            <Zap size={18} color="var(--green)" />
-          </div>
+          }} />
           <div>
-            <span style={{ fontSize: 20, fontWeight: 800, color: 'var(--text)', letterSpacing: '-0.01em', fontFamily: "'Syne', sans-serif" }}>mela.ai</span>
+            <span style={{ fontSize: 20, fontWeight: 800, color: 'var(--text)', letterSpacing: '-0.01em', fontFamily: "'Syne', sans-serif" }}>
+              <span style={{ color: 'var(--green)' }}>mela</span><span style={{ color: 'var(--text)' }}>.ai</span>
+            </span>
           </div>
         </div>
 
