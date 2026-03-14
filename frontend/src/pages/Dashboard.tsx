@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Zap, Settings, Users, ArrowRight, LogOut } from 'lucide-react';
+import { Zap, Settings, Users, ArrowRight, LogOut, Home } from 'lucide-react';
 
 const Dashboard: React.FC = () => {
   const { logout, user } = useAuth();
@@ -29,9 +29,15 @@ const Dashboard: React.FC = () => {
           <div style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--lime10)', border: '1px solid var(--lime35)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Zap size={14} color="var(--green)" />
           </div>
-          <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-0.01em' }}>SwarmOS</span>
+          <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-0.01em' }}>mela.ai</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <button onClick={() => navigate('/')} style={{
+            background: 'none', border: '1px solid var(--border)', padding: '6px 12px',
+            borderRadius: 6, color: 'var(--text3)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12
+          }}>
+            <Home size={14} /> Home
+          </button>
           <span style={{ fontSize: 13, color: 'var(--text3)' }}>{user?.email}</span>
           <button onClick={() => { logout(); navigate('/login'); }} style={{
             background: 'none', border: '1px solid var(--border)', padding: '6px 12px',
@@ -44,7 +50,7 @@ const Dashboard: React.FC = () => {
 
       {/* Main Content */}
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '80px 24px' }}>
-        <h1 style={{ fontSize: 32, fontWeight: 600, marginBottom: 12, color: 'var(--text)' }}>Welcome to SwarmOS</h1>
+        <h1 style={{ fontSize: 32, fontWeight: 600, marginBottom: 12, color: 'var(--text)' }}>Welcome to mela.ai</h1>
         <p style={{ fontSize: 14, color: 'var(--text3)', marginBottom: 48, maxWidth: 400, textAlign: 'center' }}>
           Select how you want to interact with the platform. You can host your own event or join an existing one.
         </p>
@@ -107,6 +113,26 @@ const Dashboard: React.FC = () => {
             </p>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text3)', fontSize: 12, fontWeight: 600, marginTop: 16 }}>
               Enter Code <ArrowRight size={14} />
+            </div>
+          </div>
+
+          {/* Card 4: Manage Events */}
+          <div onClick={() => navigate('/organizer')} className="depth-panel" style={{
+            width: 260, padding: 32, display: 'flex', flexDirection: 'column', gap: 16, cursor: 'pointer',
+            transition: 'all 0.2s', border: '1px solid var(--border)'
+          }}
+            onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--green)'}
+            onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--border)'}
+          >
+            <div style={{ width: 48, height: 48, borderRadius: 12, background: 'rgba(0, 232, 122, 0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}>
+              <Zap size={24} color="var(--text3)" />
+            </div>
+            <h2 style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>My Events</h2>
+            <p style={{ fontSize: 13, color: 'var(--text3)', margin: 0, lineHeight: 1.5, flex: 1 }}>
+              Manage your existing events, view logs, and orchestrate your active AI agents.
+            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text3)', fontSize: 12, fontWeight: 600, marginTop: 16 }}>
+              Open Organizer <ArrowRight size={14} />
             </div>
           </div>
         </div>

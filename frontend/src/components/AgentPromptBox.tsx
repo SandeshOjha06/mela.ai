@@ -210,7 +210,7 @@ export function AgentPromptBox({ title, icon: Icon, colorVar, onBack, eventId }:
                         className="mt-4 rounded-2xl border border-border/40 bg-card p-5 flex items-center gap-3"
                     >
                         <Clock className="h-4 w-4 text-muted-foreground animate-spin" />
-                        <span className="text-sm text-muted-foreground font-mono">Swarm agents running...</span>
+                        <span className="text-sm text-muted-foreground font-mono">mela.ai agents running...</span>
                     </motion.div>
                 )}
             </AnimatePresence>

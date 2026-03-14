@@ -19,11 +19,19 @@ function AppRoutes() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-indigo-600"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
-        </div>
+      <div style={{
+        minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'var(--bg)', flexDirection: 'column', gap: 20,
+      }}>
+        <div style={{
+          width: 40, height: 40, border: '3px solid var(--border)',
+          borderTopColor: 'var(--green)', borderRadius: '50%',
+          animation: 'spin 0.8s linear infinite',
+        }} />
+        <p style={{ color: 'var(--text3)', fontSize: 13, fontFamily: "'IBM Plex Mono', monospace" }}>
+          Authenticating…
+        </p>
+        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
       </div>
     );
   }
@@ -33,15 +41,10 @@ function AppRoutes() {
       <Route path="/" element={<HeroPage />} />
       <Route path="/login" element={user ? <Navigate to="/dashboard" /> : <Login />} />
       <Route path="/dashboard" element={user ? <Dashboard /> : <Navigate to="/login" />} />
-      <Route
-        path="/organizer"
-        element={user ? <Index /> : <Navigate to="/login" />}
-      />
+      <Route path="/organizer" element={user ? <Index /> : <Navigate to="/login" />} />
       <Route path="/join" element={<JoinEvent />} />
-      <Route
-        path="/event/:eventId"
-        element={user ? <ParticipantPortal /> : <Navigate to="/login" />}
-      />
+      {/* Participant portal — no auth required, participants join via code */}
+      <Route path="/event/:eventId" element={<ParticipantPortal />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

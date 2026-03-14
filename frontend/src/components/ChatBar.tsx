@@ -2,10 +2,11 @@ import { useState, useRef, useEffect } from "react";
 import { Send, Zap, ArrowLeft, MessageSquarePlus } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import axios from "axios";
+import { playMessageSound } from "../utils/sounds";
 
 type ChatMessage = { role: "user" | "bot"; text: string };
 
-export function ChatBar({ eventId, isExpanded, setExpanded }: { eventId?: string, isExpanded?: boolean, setExpanded?: (x: boolean) => void }) {
+export function ChatBar({ eventId, isExpanded, setExpanded, onInputChange }: { eventId?: string, isExpanded?: boolean, setExpanded?: (x: boolean) => void, onInputChange?: (x: string) => void }) {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [input, setInput] = useState("");
     const [loading, setLoading] = useState(false);
@@ -21,7 +22,9 @@ export function ChatBar({ eventId, isExpanded, setExpanded }: { eventId?: string
         const userMsg: ChatMessage = { role: "user", text: promptText };
         setMessages((prev) => [...prev, userMsg]);
         setInput("");
+        onInputChange?.("");
         setLoading(true);
+        playMessageSound();
 
         // Force expand when sending a message if not expanded yet
         if (!isExpanded && setExpanded) setExpanded(true);
@@ -33,7 +36,7 @@ export function ChatBar({ eventId, isExpanded, setExpanded }: { eventId?: string
             });
             const data = res.data;
             const output = data?.emergency_alert_message
-                || (data?.logs?.length ? data.logs.join("\n") : "Emergency handled by Swarm.");
+                || (data?.logs?.length ? data.logs.join("\n") : "Emergency handled by mela.ai.");
 
             setMessages((prev) => [
                 ...prev,
@@ -58,7 +61,7 @@ export function ChatBar({ eventId, isExpanded, setExpanded }: { eventId?: string
             {/* Topbar logic for fullscreen back button */}
             {isExpanded && (
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                    <h2 style={{ fontSize: 14, fontWeight: 500, margin: 0, color: "var(--text)" }}>Swarm Live Execution</h2>
+                    <h2 style={{ fontSize: 14, fontWeight: 500, margin: 0, color: "var(--text)" }}>mela.ai Live Execution</h2>
                     <button onClick={() => setExpanded?.(false)} style={{ background: "none", border: "none", color: "var(--text3)", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
                         <ArrowLeft size={16} /> Back
                     </button>
@@ -107,7 +110,7 @@ export function ChatBar({ eventId, isExpanded, setExpanded }: { eventId?: string
                                 style={{ display: "flex", justifyContent: "flex-start" }}
                             >
                                 <span style={{ fontSize: 12, padding: "8px 14px", borderRadius: 8, background: "var(--surface2)", color: "var(--text3)", border: "1px solid var(--border)", fontStyle: "italic" }}>
-                                    Swarm agents executing...
+                                    mela.ai agents executing...
                                 </span>
                             </motion.div>
                         )}
@@ -126,7 +129,7 @@ export function ChatBar({ eventId, isExpanded, setExpanded }: { eventId?: string
                     ].map(suggestion => (
                         <button
                             key={suggestion}
-                            onClick={() => setInput(suggestion)}
+                            onClick={() => { setInput(suggestion); onInputChange?.(suggestion); }}
                             style={{
                                 flexShrink: 0,
                                 background: "var(--surface2)",
@@ -161,7 +164,7 @@ export function ChatBar({ eventId, isExpanded, setExpanded }: { eventId?: string
                 {isExpanded ? (
                     <textarea
                         value={input}
-                        onChange={(e) => setInput(e.target.value)}
+                        onChange={(e) => { setInput(e.target.value); onInputChange?.(e.target.value); }}
                         onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), sendMessage())}
                         placeholder="Instruct the swarm to solve a problem..."
                         style={{ flex: 1, background: "transparent", border: "none", outline: "none", fontSize: 13, color: "var(--text)", fontFamily: "inherit", resize: "none", minHeight: 90 }}
@@ -171,9 +174,9 @@ export function ChatBar({ eventId, isExpanded, setExpanded }: { eventId?: string
                 ) : (
                     <input
                         value={input}
-                        onChange={(e) => setInput(e.target.value)}
+                        onChange={(e) => { setInput(e.target.value); onInputChange?.(e.target.value); }}
                         onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendMessage()}
-                        placeholder="Report an event issue to the Swarm..."
+                        placeholder="Report an event issue to mela.ai..."
                         style={{ flex: 1, background: "transparent", border: "none", outline: "none", fontSize: 13, color: "var(--text)", fontFamily: "inherit" }}
                         disabled={loading}
                     />

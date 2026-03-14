@@ -138,6 +138,11 @@ class TicketResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class TicketStatusUpdateRequest(BaseModel):
+    """Request schema for updating a ticket status."""
+    status: str = Field(..., description="E.g., 'Open', 'Solving', 'Resolved'")
+
+
 # ---------------------------------------------------------------------------
 # Swarm Trigger Schemas
 # ---------------------------------------------------------------------------
@@ -185,6 +190,7 @@ class UnresolvedQueryResponse(BaseModel):
     query_id: int
     event_id: int
     question_text: str
+    organizer_answer: str | None = None
     status: str
 
     model_config = {"from_attributes": True}
@@ -363,6 +369,8 @@ class EventListItem(BaseModel):
     status: str
     created_at: datetime
     total_budget_allocated: float
+    participant_code: Optional[str] = None
+    organizer_code: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -381,6 +389,8 @@ class EventDetailResponse(BaseModel):
     participant_count: int
     ticket_count: int
     unresolved_query_count: int
+    participant_code: Optional[str] = None
+    organizer_code: Optional[str] = None
 
 
 class EventStatusUpdate(BaseModel):

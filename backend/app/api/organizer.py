@@ -28,6 +28,7 @@ from app.schemas.schemas import (
     BudgetAgentRequest,
     BudgetAgentResult,
     BudgetLogResponse,
+
     EmailCampaignResult,
     EmailLogResponse,
     EmergencyAgentRequest,
@@ -35,6 +36,7 @@ from app.schemas.schemas import (
     EmergencyLogResponse,
     EventCodeResponse,
     EventCreate,
+
     EventDetailResponse,
     EventListItem,
     EventResponse,
@@ -48,9 +50,12 @@ from app.schemas.schemas import (
     ScheduleAgentResult,
     SchedulerLogResponse,
     SwarmInteractionLogResponse,
+    SwarmLogResponse,
     SwarmResult,
     SwarmTriggerRequest,
     TicketResponse,
+    TicketStatusUpdateRequest,
+    UnresolvedQueryResponse,
 )
 from app.swarm.graph import swarm_graph
 
@@ -107,17 +112,26 @@ async def list_events(
         # Defaulting to return only the current_user's events unless explicit matching is needed
         effective_organizer = current_user.email
         events = await crud.get_all_events(db, organizer_name=effective_organizer, status=status)
-        return [
-            EventListItem(
+
+        from sqlalchemy import select as sa_select
+        from app.db.models import EventCode as _EventCode
+
+        result = []
+        for e in events:
+            code_row = (await db.execute(
+                sa_select(_EventCode).where(_EventCode.event_id == e.event_id)
+            )).scalar_one_or_none()
+            result.append(EventListItem(
                 event_id=e.event_id,
                 event_name=e.event_name,
                 organizer_name=e.organizer_name,
                 status=e.status or "active",
                 created_at=e.created_at,
                 total_budget_allocated=e.total_budget_allocated,
-            )
-            for e in events
-        ]
+                participant_code=code_row.participant_code if code_row else None,
+                organizer_code=code_row.organizer_code if code_row else None,
+            ))
+        return result
     except Exception as e:
         logger.error(f"Error listing events: {e}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
@@ -227,10 +241,11 @@ async def get_event_detail(
             status=event.status or "active",
             created_at=event.created_at,
             master_schedule=event.master_schedule or {},
-            budget_report=event.budget_report or {},
             participant_count=p_count,
             ticket_count=t_count,
             unresolved_query_count=uq_count,
+            participant_code=event.participant_code,
+            organizer_code=event.organizer_code,
         )
     except HTTPException:
         raise
@@ -554,6 +569,62 @@ async def get_priority_queue(
 
 
 # ---------------------------------------------------------------------------
+# PATCH /organizer/events/{event_id}/tickets/{ticket_id}/status
+# ---------------------------------------------------------------------------
+
+@router.patch("/tickets/{ticket_id}/status", response_model=TicketResponse)
+async def update_ticket_status_endpoint(
+    event_id: int,
+    ticket_id: int,
+    request: TicketStatusUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Update the status of a specific ticket (e.g. Open -> Solving -> Resolved)."""
+    try:
+        event = await crud.get_event_context(db, event_id)
+        if event is None:
+            raise HTTPException(status_code=404, detail=f"Event {event_id} not found.")
+
+        ticket = await crud.update_ticket_status(db, ticket_id, request.status)
+        if ticket is None or ticket.event_id != event_id:
+            raise HTTPException(status_code=404, detail=f"Ticket {ticket_id} not found in this event.")
+
+        return TicketResponse.model_validate(ticket)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating ticket {ticket_id} status for event {event_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error updating ticket status.")
+
+
+# ---------------------------------------------------------------------------
+# GET /organizer/events/{event_id}/unresolved_queries
+# ---------------------------------------------------------------------------
+
+@router.get("/unresolved_queries", response_model=list[UnresolvedQueryResponse])
+async def get_unresolved_queries_endpoint(
+    event_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Fetch all pending unresolved queries for an event, so organizers can answer them."""
+    try:
+        event = await crud.get_event_context(db, event_id)
+        if event is None:
+            raise HTTPException(status_code=404, detail=f"Event {event_id} not found.")
+
+        # Let's import the model to reuse the crud
+        queries = await crud.get_unresolved_queries(db, event_id, status="Pending")
+
+        return [UnresolvedQueryResponse.model_validate(q) for q in queries]
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        logger.error(f"Error fetching unresolved queries for event {event_id}: {e}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail="Internal server error fetching unresolved queries.")
+
+
+# ---------------------------------------------------------------------------
 # POST /organizer/events/{event_id}/run_marketing
 # ---------------------------------------------------------------------------
 
@@ -651,7 +722,49 @@ async def run_marketing_agent(
 
 
 # ---------------------------------------------------------------------------
-# POST /organizer/events/{event_id}/run_email
+# Event Completion and Logs
+# ---------------------------------------------------------------------------
+
+@router.post("/complete")
+async def complete_event(
+    event_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Mark an event as completed."""
+    try:
+        event = await crud.update_event_status(db, event_id, "completed")
+        if not event:
+            raise HTTPException(status_code=404, detail="Event not found.")
+        return {"status": "success", "message": "Event marked as completed."}
+    except Exception as e:
+        logger.error(f"Error completing event {event_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/logs", response_model=list[SwarmLogResponse])
+async def get_event_logs(
+    event_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Fetch all agent swarm interaction logs for a specific event."""
+    try:
+        logs = await crud.get_event_swarm_logs(db, event_id)
+        return [
+            SwarmLogResponse(
+                log_id=log.id,
+                event_id=log.event_id,
+                timestamp=log.timestamp,
+                agent_name=log.agent_name,
+                action_taken=log.action_taken,
+            ) for log in logs
+        ]
+    except Exception as e:
+        logger.error(f"Error fetching logs for event {event_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---------------------------------------------------------------------------
+# Manual Agent Trigger (For Email, Schedule, Emergency)
 # ---------------------------------------------------------------------------
 
 @router.post("/run_email", response_model=EmailCampaignResult)
@@ -672,9 +785,6 @@ async def run_email_agent(
         event = await crud.get_event_context(db, event_id)
         if event is None:
             raise HTTPException(status_code=404, detail=f"Event {event_id} not found.")
-
-        if csv_file.content_type not in ("text/csv", "application/csv", "application/octet-stream", "text/plain"):
-            raise HTTPException(status_code=400, detail="Uploaded file must be a CSV.")
 
         raw_bytes = await csv_file.read()
         try:

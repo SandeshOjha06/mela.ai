@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { Bell } from "lucide-react";
+import { playResolvedSound } from "../utils/sounds";
 
 const API = "/api/v1";
 
@@ -42,6 +44,33 @@ export default function ParticipantPortal() {
   const [reportSuccess, setReportSuccess] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
 
+  // Participant count
+  const [participantCount, setParticipantCount] = useState<number | null>(null);
+
+  // Notifications
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+
+  // Fetch resolved tickets
+  useEffect(() => {
+    if (!eventId) return;
+    const fetchResolved = async () => {
+      try {
+        const res = await fetch(`${API}/events/${eventId}/resolved_tickets`);
+        if (res.ok) {
+          const tickets = await res.json();
+          setNotifications(prev => {
+            if (tickets.length > prev.length && prev.length > 0) playResolvedSound();
+            return tickets;
+          });
+        }
+      } catch { /* silent */ }
+    };
+    fetchResolved();
+    const interval = setInterval(fetchResolved, 10000);
+    return () => clearInterval(interval);
+  }, [eventId]);
+
   // Fetch timeline
   useEffect(() => {
     if (!eventId) return;
@@ -70,6 +99,20 @@ export default function ParticipantPortal() {
     })();
   }, [eventId]);
 
+  // Fetch participant count
+  useEffect(() => {
+    if (!eventId) return;
+    (async () => {
+      try {
+        const res = await fetch(`/api/v1/organizer/events/${eventId}`);
+        if (res.ok) {
+          const data = await res.json();
+          setParticipantCount(data.participant_count ?? null);
+        }
+      } catch { /* silent */ }
+    })();
+  }, [eventId]);
+
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
@@ -88,12 +131,16 @@ export default function ParticipantPortal() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question: q }),
       });
-      const data = await res.json();
-      setMessages(prev => [...prev, {
-        role: "bot",
-        text: data.answer || "Sorry, I couldn't process that.",
-        source: data.source,
-      }]);
+      if (!res.ok) {
+        setMessages(prev => [...prev, { role: "bot", text: "Sorry, the server encountered an error. Please try again in a moment.", source: "error" }]);
+      } else {
+        const data = await res.json();
+        setMessages(prev => [...prev, {
+          role: "bot",
+          text: data.answer || "Sorry, I couldn't process that.",
+          source: data.source,
+        }]);
+      }
     } catch {
       setMessages(prev => [...prev, { role: "bot", text: "Connection error. Please try again." }]);
     }
@@ -110,7 +157,7 @@ export default function ParticipantPortal() {
       const res = await fetch(`${API}/events/${eventId}/report`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ problem_description: reportText }),
+        body: JSON.stringify({ issue_text: reportText }),
       });
       if (res.ok) {
         setReportSuccess(true);
@@ -172,6 +219,50 @@ export default function ParticipantPortal() {
             {state.email}
           </span>
         )}
+        {participantCount !== null && (
+          <div style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--surface)", border: "1px solid var(--border)", padding: "4px 12px", borderRadius: 6 }}>
+            <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--green)" }} />
+            <span className="font-mono" style={{ fontSize: 10, color: "var(--text3)" }}>
+              {participantCount} participant{participantCount !== 1 ? "s" : ""}
+            </span>
+          </div>
+        )}
+
+        {/* Notifications */}
+        <div style={{ position: "relative" }}>
+          <button
+            onClick={() => setShowNotifications(s => !s)}
+            style={{ position: "relative", background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text2)", padding: "6px", borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+          >
+            <Bell size={14} />
+            {notifications.length > 0 && (
+              <div style={{ position: "absolute", top: -2, right: -2, width: 8, height: 8, borderRadius: "50%", background: "var(--red)", border: "1px solid var(--surface)" }} title={`${notifications.length} Problems Resolved`} />
+            )}
+          </button>
+
+          {showNotifications && (
+            <div style={{
+              position: "absolute", top: "100%", right: 0, marginTop: 8, width: 320,
+              background: "var(--surface)", border: "1px solid var(--border)",
+              borderRadius: 8, padding: 12, zIndex: 100, boxShadow: "0 10px 30px rgba(0,0,0,0.5)"
+            }}>
+              <h3 style={{ margin: "0 0 12px 0", fontSize: 13, color: "var(--text)", fontWeight: 600 }}>Resolved Problems</h3>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 300, overflowY: "auto", paddingRight: 4 }}>
+                {notifications.length > 0 ? notifications.map((n, i) => (
+                  <div key={i} style={{ padding: 10, background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 6 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                      <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--green)" }} />
+                      <span className="font-mono" style={{ fontSize: 10, color: "var(--green)", letterSpacing: "0.05em" }}>RESOLVED</span>
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.5 }}>{n.issue_text}</div>
+                  </div>
+                )) : (
+                  <p style={{ fontSize: 12, color: "var(--text3)", margin: 0, fontStyle: "italic", textAlign: "center", padding: 20 }}>No resolved problems yet.</p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       </header>
 
       {/* ── Main content: Timeline (left) + Chatbot (right) ── */}
@@ -263,11 +354,11 @@ export default function ParticipantPortal() {
             <button
               onClick={() => setShowReportModal(true)}
               style={{
-                background: "rgba(239,68,68,0.18)",
-                border: "1.5px solid rgba(239,68,68,0.55)",
-                color: "var(--red)",
+                background: "rgba(239,68,68,0.06)",
+                border: "1px solid rgba(239,68,68,0.2)",
+                color: "#f87171",
                 padding: "8px 20px",
-                borderRadius: 8,
+                borderRadius: 6,
                 fontSize: 11,
                 textTransform: "uppercase",
                 cursor: "pointer",
@@ -278,11 +369,11 @@ export default function ParticipantPortal() {
                 gap: 8,
                 transition: "all 0.15s",
                 fontFamily: "inherit",
-                fontWeight: 700,
+                fontWeight: 600,
                 letterSpacing: "0.04em",
               }}
             >
-              ⚠️ EMERGENCY
+              🚨 Report Problem
             </button>
           </div>
         </div>
@@ -387,7 +478,7 @@ export default function ParticipantPortal() {
             <input
               value={chatInput}
               onChange={e => setChatInput(e.target.value)}
-              placeholder="Ask about schedule, budget, rules…"
+              placeholder="Ask about schedule, rules, anything…"
               style={{
                 flex: 1, background: "var(--bg)", border: "1px solid var(--border)",
                 color: "var(--text)", padding: "9px 12px", borderRadius: 0,
@@ -428,10 +519,10 @@ export default function ParticipantPortal() {
               <div className="font-mono" style={{
                 background: "var(--red10)", border: "1px solid var(--red30)",
                 padding: "4px 8px", borderRadius: 4, fontSize: 10, fontWeight: 600, color: "var(--red)"
-              }}>ALERT</div>
+              }}>REPORT</div>
               <div>
-                <p style={{ fontSize: 15, fontWeight: 600, color: "var(--text)", margin: 0 }}>Report Emergency</p>
-                <p style={{ fontSize: 11, color: "var(--text3)", margin: 0 }}>Agents will prioritize this urgently</p>
+                <p style={{ fontSize: 15, fontWeight: 600, color: "var(--text)", margin: 0 }}>Report a Problem</p>
+                <p style={{ fontSize: 11, color: "var(--text3)", margin: 0 }}>Our AI agents will process and route this to the organizer</p>
               </div>
               <button
                 onClick={() => setShowReportModal(false)}
@@ -466,8 +557,8 @@ export default function ParticipantPortal() {
                   type="submit"
                   disabled={reportLoading}
                   style={{
-                    background: "var(--red)", color: "#0a0a0b", border: "none",
-                    padding: "10px", borderRadius: 8, fontSize: 12,
+                    background: "rgba(239,68,68,0.12)", color: "#f87171", border: "1px solid rgba(239,68,68,0.3)",
+                    padding: "10px", borderRadius: 6, fontSize: 12,
                     fontWeight: 600, cursor: reportLoading ? "not-allowed" : "pointer",
                     opacity: reportLoading ? 0.7 : 1, alignSelf: "flex-start",
                     paddingLeft: 24, paddingRight: 24, fontFamily: "inherit",

@@ -28,7 +28,7 @@ export function EventSidebar() {
                     <div className="h-8 w-8 rounded-lg bg-primary/20 flex items-center justify-center shrink-0">
                         <Zap className="h-4 w-4 text-primary" />
                     </div>
-                    <span className="text-sm font-semibold tracking-tight text-foreground">SwarmOS</span>
+                    <span className="text-sm font-semibold tracking-tight text-foreground">mela.ai</span>
                 </div>
 
                 <SidebarGroup>

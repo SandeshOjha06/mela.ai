@@ -63,7 +63,7 @@ export default function JoinEvent() {
       }}>
         {/* Back button */}
         <button
-          onClick={() => navigate("/dashboard")}
+          onClick={() => navigate("/")}
           style={{
             background: "none",
             border: "none",

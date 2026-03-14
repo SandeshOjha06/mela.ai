@@ -28,6 +28,7 @@ from app.schemas.schemas import (
     JoinEventResponse,
     SwarmResult,
     TimelineResponse,
+    TicketResponse,
 )
 from app.swarm.graph import swarm_graph
 
@@ -207,14 +208,11 @@ async def chat_with_rag(
         # ── 1. Build context from PostgreSQL ─────────────────────────────
         import json as _json
         schedule_str = _json.dumps(event.master_schedule, indent=2) if event.master_schedule else "No schedule available."
-        budget_str = _json.dumps(event.budget_report, indent=2) if event.budget_report else "No budget information available."
 
         pg_context = f"""EVENT NAME: {event.event_name}
 ORGANIZER: {event.organizer_name}
 RULES & CONTEXT: {event.event_rules_and_context or "No specific rules."}
-TOTAL BUDGET: {event.total_budget_allocated}
-MASTER SCHEDULE: {schedule_str}
-BUDGET REPORT: {budget_str}"""
+MASTER SCHEDULE: {schedule_str}"""
 
         # ── 2. Query ChromaDB for resolved Q&A ──────────────────────────
         rag_answer, rag_confidence = query_rag(event_id=event_id, question=request.question)
@@ -282,7 +280,8 @@ Be concise, friendly, and direct. Do NOT make up information.
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error in chat for event {event_id}: {e}")
+        import traceback
+        logger.error(f"Error in chat for event {event_id}: {e}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail="Internal server error processing chat.")
 
 
@@ -419,3 +418,28 @@ async def get_event_info(
     except Exception as e:
         logger.error(f"Error fetching info for event {event_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error fetching event info.")
+
+
+# GET /events/{event_id}/resolved_tickets — for participant notifications
+
+@router.get("/resolved_tickets", response_model=list[TicketResponse])
+async def get_resolved_tickets(
+    event_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Fetch resolved support tickets for notifications."""
+    try:
+        tickets = await crud.get_resolved_tickets(db, event_id)
+        return [
+            TicketResponse(
+                ticket_id=t.ticket_id,
+                issue_text=t.issue_text,
+                problem_category=t.problem_category,
+                urgency_score=t.urgency_score,
+                status=t.status,
+                created_at=t.created_at,
+            ) for t in tickets
+        ]
+    except Exception as e:
+        logger.error(f"Error fetching resolved tickets for {event_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")

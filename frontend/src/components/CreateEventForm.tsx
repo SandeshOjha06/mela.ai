@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { ArrowRightCircle } from "lucide-react";
+import { ArrowRightCircle, CheckCircle2, Copy } from "lucide-react";
 import axios from "axios";
 
 interface CreateEventFormProps {
@@ -16,6 +16,7 @@ export const CreateEventForm = ({ onSuccess }: CreateEventFormProps) => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
     const [showValidation, setShowValidation] = useState(false);
+    const [createdEvent, setCreatedEvent] = useState<any>(null);
 
     const nameInputRef = useRef<HTMLInputElement>(null);
 
@@ -45,7 +46,7 @@ export const CreateEventForm = ({ onSuccess }: CreateEventFormProps) => {
                 budget_report: {},
             });
 
-            onSuccess(res.data);
+            setCreatedEvent(res.data);
         } catch (err: any) {
             setError(err.response?.data?.detail || err.message || "An error occurred");
             setLoading(false);
@@ -53,6 +54,52 @@ export const CreateEventForm = ({ onSuccess }: CreateEventFormProps) => {
     };
 
     const isNameInvalid = showValidation && !eventName.trim();
+
+    if (createdEvent) {
+        return (
+            <div style={{ width: "100%", maxWidth: 440, margin: "0 auto", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 20, padding: 32, textAlign: "center" }}>
+                <div style={{ width: 64, height: 64, borderRadius: "50%", background: "rgba(29, 158, 117, 0.1)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
+                    <CheckCircle2 size={32} color="var(--green)" />
+                </div>
+                <h2 style={{ fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: 24, color: "#fff", margin: "0 0 8px" }}>Event Initialized!</h2>
+                <p style={{ fontSize: 14, color: "var(--text3)", margin: "0 0 24px", lineHeight: 1.5 }}>
+                    Your swarm is ready. Here are the join codes for your participants and fellow organizers.
+                </p>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 32 }}>
+                    <div style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 12, padding: "16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <div style={{ textAlign: "left" }}>
+                            <div style={{ fontSize: 11, fontFamily: "'JetBrains Mono', monospace", color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Participant Code</div>
+                            <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", color: "#fff", letterSpacing: "0.05em" }}>{createdEvent.participant_code}</div>
+                        </div>
+                        <button onClick={() => navigator.clipboard.writeText(createdEvent.participant_code)} style={{ background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 8, padding: 8, color: "var(--text)", cursor: "pointer" }} title="Copy Code">
+                            <Copy size={16} />
+                        </button>
+                    </div>
+
+                    <div style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 12, padding: "16px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <div style={{ textAlign: "left" }}>
+                            <div style={{ fontSize: 11, fontFamily: "'JetBrains Mono', monospace", color: "var(--text3)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Organizer Code</div>
+                            <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", color: "#fff", letterSpacing: "0.05em" }}>{createdEvent.organizer_code}</div>
+                        </div>
+                        <button onClick={() => navigator.clipboard.writeText(createdEvent.organizer_code)} style={{ background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 8, padding: 8, color: "var(--text)", cursor: "pointer" }} title="Copy Code">
+                            <Copy size={16} />
+                        </button>
+                    </div>
+                </div>
+
+                <button
+                    onClick={() => onSuccess(createdEvent)}
+                    style={{
+                        width: "100%", background: "#fff", color: "#000", fontFamily: "'Syne', sans-serif", fontWeight: 700,
+                        height: 48, borderRadius: 10, fontSize: 15, border: "none", cursor: "pointer", transition: "all 0.2s"
+                    }}
+                >
+                    Continue to Dashboard
+                </button>
+            </div>
+        );
+    }
 
     return (
         <div style={{ width: "100%", maxWidth: 520, margin: "0 auto", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 20, padding: 32 }}>
@@ -215,7 +262,7 @@ export const CreateEventForm = ({ onSuccess }: CreateEventFormProps) => {
                             transition: "all 0.2s"
                         }}
                     >
-                        {loading ? "Initializing..." : <>Initialize Swarm <ArrowRightCircle size={18} /></>}
+                        {loading ? "Initializing..." : <>Initialize mela.ai <ArrowRightCircle size={18} /></>}
                     </button>
                     <p style={{ textAlign: "center", fontSize: 12, color: "var(--text3)", margin: "14px 0 0 0" }}>
                         Your context will be distributed to all agents in the swarm.

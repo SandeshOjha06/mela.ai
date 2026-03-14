@@ -43,6 +43,12 @@ async def _apply_schema_patches() -> None:
                 ADD COLUMN IF NOT EXISTS category_reports JSONB DEFAULT '[]'::jsonb;
                 """
             ))
+            await conn.execute(text(
+                """
+                ALTER TABLE IF EXISTS unresolved_queries
+                ADD COLUMN IF NOT EXISTS organizer_answer TEXT DEFAULT NULL;
+                """
+            ))
         elif dialect == "sqlite":
             result = await conn.execute(text("PRAGMA table_info(email_logs)"))
             existing_columns = {row[1] for row in result.fetchall()}

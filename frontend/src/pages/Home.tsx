@@ -32,7 +32,7 @@ function LiveLog() {
     setVisible([]);
     LOG_ITEMS.forEach((item, i) => {
       setTimeout(() => {
-        setVisible(v => [...v, { ...item, id: Date.now() + i }].slice(-8));
+        setVisible(v => [...v, { ...item, id: Date.now() + i }].slice(-15));
       }, item.delay);
     });
   };
@@ -53,11 +53,14 @@ function LiveLog() {
 
   return (
     <div className="depth-panel" style={{
-      padding: "24px 24px 20px",
+      padding: "24px 24px 0px",
       fontFamily: "'IBM Plex Mono', monospace",
       position: "relative",
       overflow: "hidden",
       boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
+      height: 480,
+      display: "flex",
+      flexDirection: "column",
     }}>
 
 
@@ -96,54 +99,57 @@ function LiveLog() {
         </div>
       </div>
 
-      {/* Log lines */}
-      <div style={{ minHeight: 280 }}>
-        {visible.map((item, i) => (
-          <div
-            key={`${item.id}-${i}`}
-            style={{
-              display: "flex", gap: 12, marginBottom: 13,
-              padding: "8px 12px", borderRadius: 8,
-              background: item.msg.includes("⚠️") || item.msg.includes("WARN")
-                ? "var(--red10)"
-                : item.msg.includes("✅") || item.msg.includes("OK")
-                  ? "var(--lime10)"
-                  : "transparent",
-              border: item.msg.includes("⚠️") || item.msg.includes("WARN")
-                ? "1px solid var(--red30)"
-                : item.msg.includes("✅") || item.msg.includes("OK")
-                  ? "1px solid var(--lime35)"
-                  : "1px solid transparent",
-              animation: "fadeSlideIn 0.4s ease forwards",
-              opacity: 0,
-              alignItems: "flex-start",
-            }}
-          >
-            <span style={{ color: "var(--text3)", flexShrink: 0, fontSize: 11, paddingTop: 1 }}>
-              {now()}
-            </span>
-            <span style={{
-              color: item.color, fontWeight: 700,
-              flexShrink: 0, minWidth: 96, fontSize: 11, paddingTop: 1,
-            }}>
-              [{item.agent.toUpperCase()}]
-            </span>
-            <span style={{
-              color: "var(--text)",
-              fontSize: 12, lineHeight: 1.5,
-            }}>
-              {item.msg}
-            </span>
-          </div>
-        ))}
+      {/* Log lines container */}
+      <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
+        <div style={{ position: "absolute", bottom: 20, left: 0, right: 0, display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
+          {visible.map((item, i) => (
+            <div
+              key={`${item.id}-${i}`}
+              style={{
+                display: "flex", gap: 12, marginBottom: 13,
+                padding: "8px 12px", borderRadius: 8,
+                background: item.msg.includes("⚠️") || item.msg.includes("WARN")
+                  ? "var(--red10)"
+                  : item.msg.includes("✅") || item.msg.includes("OK")
+                    ? "var(--lime10)"
+                    : "transparent",
+                border: item.msg.includes("⚠️") || item.msg.includes("WARN")
+                  ? "1px solid var(--red30)"
+                  : item.msg.includes("✅") || item.msg.includes("OK")
+                    ? "1px solid var(--lime35)"
+                    : "1px solid transparent",
+                animation: "fadeSlideInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards",
+                opacity: 0,
+                alignItems: "flex-start",
+                transition: "all 0.3s ease",
+              }}
+            >
+              <span style={{ color: "var(--text3)", flexShrink: 0, fontSize: 11, paddingTop: 1 }}>
+                {now()}
+              </span>
+              <span style={{
+                color: item.color, fontWeight: 700,
+                flexShrink: 0, minWidth: 96, fontSize: 11, paddingTop: 1,
+              }}>
+                [{item.agent.toUpperCase()}]
+              </span>
+              <span style={{
+                color: "var(--text)",
+                fontSize: 12, lineHeight: 1.5,
+              }}>
+                {item.msg}
+              </span>
+            </div>
+          ))}
 
-        {/* Blinking cursor */}
-        {visible.length > 0 && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 12px" }}>
-            <span style={{ color: "var(--text3)", fontSize: 11 }}>{now()}</span>
-            <span style={{ color: "var(--green)", fontSize: 13, animation: "blink 1s step-end infinite" }}>█</span>
-          </div>
-        )}
+          {/* Blinking cursor */}
+          {visible.length > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 12px", animation: "fadeSlideInUp 0.4s ease forwards" }}>
+              <span style={{ color: "var(--text3)", fontSize: 11 }}>{now()}</span>
+              <span style={{ color: "var(--green)", fontSize: 13, animation: "blink 1s step-end infinite" }}>█</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Bottom fade */}
@@ -186,6 +192,10 @@ export default function HeroPage() {
         @keyframes fadeSlideIn {
           from { opacity: 0; transform: translateX(-8px); }
           to   { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes fadeSlideInUp {
+          from { opacity: 0; transform: translateY(12px); }
+          to   { opacity: 1; transform: translateY(0); }
         }
         @keyframes pulse {
           0%,100% { opacity: 1; }
@@ -257,7 +267,7 @@ export default function HeroPage() {
               fontWeight: 700,
               fontSize: 19, letterSpacing: "-0.5px", color: "var(--text)"
             }}>
-              Event<span style={{ color: "var(--green)" }}>Swarm</span>
+              mela<span style={{ color: "var(--green)" }}>.ai</span>
             </span>
           </div>
 
@@ -331,7 +341,7 @@ export default function HeroPage() {
                 maxWidth: 440, marginBottom: 36, margin: "0 auto",
               }}>
                 One organizer. Four AI agents. Zero manual overhead.
-                EventSwarm handles emails, scheduling, budgets and
+                mela.ai handles emails, scheduling, budgets and
                 social media — completely autonomously.
               </p>
 
@@ -341,7 +351,7 @@ export default function HeroPage() {
                 display: "flex", flexDirection: "column", alignItems: "center", gap: 16, marginBottom: 32
               }}>
                 <button className="btn-primary" onClick={() => navigate(user ? '/dashboard' : "/login")}>
-                  Launch Your Swarm →
+                  Launch mela.ai →
                 </button>
 
                 {/* Trust Signals / Micro-copy */}
