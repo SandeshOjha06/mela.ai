@@ -1,4 +1,4 @@
-import { Calendar, ChevronRight, Zap } from "lucide-react";
+import { Calendar, ChevronRight } from "lucide-react";
 import {
     Sidebar,
     SidebarContent,

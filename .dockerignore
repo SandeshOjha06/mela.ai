@@ -1,0 +1,14 @@
+.git
+node_modules
+backend/.venv
+backend/venv
+backend/__pycache__
+backend/chroma_data
+frontend/node_modules
+frontend/dist
+*.pyc
+*.md
+backend/fix_db.py
+backend/patch_db.py
+backend/query_logs.py
+backend/test_emergency.py

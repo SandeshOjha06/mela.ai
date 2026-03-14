@@ -6,7 +6,7 @@ import { useAuth } from "../contexts/AuthContext";
 import {
     Sparkles, Mail, CalendarClock, ChevronLeft, Plus, Send,
     ArrowLeft, Loader2, CheckCircle2, AlertCircle, Paperclip, X, Clock, Menu,
-    CircleDollarSign, Zap, MessageSquarePlus, Copy, Pencil, LogOut, Home
+    CircleDollarSign, MessageSquarePlus, Copy, Pencil, LogOut, Home
 } from "lucide-react";
 import { playEmergencySound, playProblemSound, playResolvedSound } from "../utils/sounds";
 import { CreateEventForm } from "../components/CreateEventForm";

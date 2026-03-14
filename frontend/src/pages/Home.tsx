@@ -258,12 +258,12 @@ export default function HeroPage() {
           background: "rgba(4, 12, 31, 0.8)",
           position: "sticky", top: 0, zIndex: 100,
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <span style={{
               fontWeight: 700,
               fontSize: 19, letterSpacing: "-0.5px", color: "var(--text)"
             }}>
-              mela<span style={{ color: "var(--green)" }}>.ai</span>
+              <span style={{ color: "var(--green)" }}>mela</span><span style={{ color: "var(--text)" }}>.ai</span>
             </span>
           </div>
 
@@ -382,8 +382,8 @@ export default function HeroPage() {
                 ...fadeUp(0.3),
                 display: "flex", flexDirection: "column", alignItems: "center", gap: 16, marginBottom: 32
               }}>
-                <button className="btn-primary" onClick={() => navigate(user ? '/dashboard' : "/login")}>
-                  Launch mela.ai →
+                <button className="btn-primary" onClick={() => navigate(user ? '/dashboard' : "/login")}> 
+                  <>Launch <span style={{ color: "var(--green)" }}>mela</span>.ai →</>
                 </button>
               </div>
 
