@@ -6,6 +6,7 @@ to all configuration parameters needed by the application.
 """
 
 from pydantic_settings import BaseSettings
+````
 
 
 class Settings(BaseSettings):
