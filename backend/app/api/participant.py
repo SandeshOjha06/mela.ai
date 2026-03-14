@@ -61,14 +61,14 @@ async def join_event(
     try:
         # Look up the code
         result = await db.execute(
-            select(EventCode).where(EventCode.code == request.code.upper().strip())
+            select(EventCode).where(EventCode.participant_code == request.code.upper().strip())
         )
         event_code = result.scalar_one_or_none()
 
         if event_code is None:
             raise HTTPException(
                 status_code=404,
-                detail="Invalid event code. Please check the code shared by your organizer."
+                detail="Invalid participant code. Please check the code shared by your organizer."
             )
 
         # Fetch the associated event
@@ -105,6 +105,48 @@ async def join_event(
         raise
     except Exception as e:
         logger.error(f"Error joining event with code {request.code}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error joining event.")
+
+# ---------------------------------------------------------------------------
+# POST /events/join/organizer  — organizer joins via lead organizer code
+# ---------------------------------------------------------------------------
+@join_router.post("/join/organizer", response_model=JoinEventResponse)
+async def join_organizer(
+    request: JoinEventRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Organizer joins an event using the specific organizer code.
+    """
+    try:
+        # Look up the code
+        result = await db.execute(
+            select(EventCode).where(EventCode.organizer_code == request.code.upper().strip())
+        )
+        event_code = result.scalar_one_or_none()
+
+        if event_code is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Invalid organizer code. Please check the code."
+            )
+
+        # Fetch the associated event
+        event = await crud.get_event_context(db, event_code.event_id)
+        if event is None:
+            raise HTTPException(status_code=404, detail="Event not found.")
+
+        return JoinEventResponse(
+            event_id=event.event_id,
+            event_name=event.event_name,
+            organizer_name=event.organizer_name,
+            master_schedule=event.master_schedule or {},
+            message=f"Welcome to {event.event_name} Organizing Team!",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error joining event as organizer with code {request.code}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error joining event.")
 
 

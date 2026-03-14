@@ -24,7 +24,47 @@ from app.db.models import (
     SwarmLog,
     Ticket,
     UnresolvedQuery,
+    User,
 )
+
+import bcrypt
+
+
+# ---------------------------------------------------------------------------
+# User / Auth CRUD
+# ---------------------------------------------------------------------------
+
+async def get_user_by_email(db: AsyncSession, email: str) -> User | None:
+    """Fetch a user by email address."""
+    result = await db.execute(select(User).where(User.email == email))
+    return result.scalar_one_or_none()
+
+
+async def get_user_by_id(db: AsyncSession, user_id: int) -> User | None:
+    """Fetch a user by their ID."""
+    result = await db.execute(select(User).where(User.user_id == user_id))
+    return result.scalar_one_or_none()
+
+
+async def create_user(
+    db: AsyncSession, email: str, password_hash: str, role: str = "participant"
+) -> User:
+    """Create a new user and return the persisted record."""
+    user = User(email=email, password_hash=password_hash, role=role)
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+async def authenticate_user(db: AsyncSession, email: str, password: str) -> User | None:
+    """Verify credentials and return the user, or None if invalid."""
+    user = await get_user_by_email(db, email)
+    if user is None:
+        return None
+    if not bcrypt.checkpw(password.encode("utf-8"), user.password_hash.encode("utf-8")):
+        return None
+    return user
 
 
 # ---------------------------------------------------------------------------

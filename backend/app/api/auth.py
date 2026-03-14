@@ -85,22 +85,12 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession
 
 
 async def get_current_organizer(current_user: User = Depends(get_current_user)) -> User:
-    """Get the current user and ensure they are an organizer."""
-    if current_user.role != "organizer":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions. Organizer role required."
-        )
+    """Get the current user (role check bypassed so users can do both)."""
     return current_user
 
 
 async def get_current_participant(current_user: User = Depends(get_current_user)) -> User:
-    """Get the current user and ensure they are a participant."""
-    if current_user.role != "participant":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not enough permissions. Participant role required."
-        )
+    """Get the current user (role check bypassed so users can do both)."""
     return current_user
 
 

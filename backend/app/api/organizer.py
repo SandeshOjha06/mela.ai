@@ -20,9 +20,10 @@ from langchain_core.messages import HumanMessage
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db
+from app.api.auth import get_current_user
 from app.core.rag import add_to_rag
 from app.db import crud
-from app.db.models import EventCode
+from app.db.models import EventCode, User
 from app.schemas.schemas import (
     BudgetAgentRequest,
     BudgetAgentResult,
@@ -66,18 +67,18 @@ events_router = APIRouter(prefix="/organizer/events", tags=["Organizer"])
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _generate_code(event_name: str) -> str:
+def _generate_code(event_name: str, code_type: str = "P") -> str:
     """
-    Generate a short, readable participant join code.
+    Generate a short, readable join code.
 
-    Format: <3-letter prefix>-<year>-<4 random chars>
-    Example: NEU-2026-7X3K
+    Format: <3-letter prefix>-2026-<type><3 random chars>
+    Example: NEU-2026-P7X3 (Participant) or NEU-2026-O9K2 (Organizer)
     """
     prefix = "".join(
         c for c in event_name.upper().replace(" ", "")[:3] if c.isalpha()
     ).ljust(3, "X")  # pad with X if name is too short
-    suffix = "".join(random.choices(string.ascii_uppercase + string.digits, k=4))
-    return f"{prefix}-2026-{suffix}"
+    suffix = "".join(random.choices(string.ascii_uppercase + string.digits, k=3))
+    return f"{prefix}-2026-{code_type}{suffix}"
 
 
 def _join_link(code: str) -> str:
@@ -94,6 +95,7 @@ async def list_events(
     status: str | None = None,
     organizer_name: str | None = None,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     List all events, optionally filtered by status and/or organizer_name.
@@ -102,7 +104,9 @@ async def list_events(
     Use ?status=active|completed|archived to filter.
     """
     try:
-        events = await crud.get_all_events(db, organizer_name=organizer_name, status=status)
+        # Defaulting to return only the current_user's events unless explicit matching is needed
+        effective_organizer = current_user.email
+        events = await crud.get_all_events(db, organizer_name=effective_organizer, status=status)
         return [
             EventListItem(
                 event_id=e.event_id,
@@ -127,6 +131,7 @@ async def list_events(
 async def create_event(
     request: EventCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Create a new event (tenant).
@@ -139,25 +144,26 @@ async def create_event(
     and join_link — all required for downstream operations.
     """
     try:
-        # Create the event record
+        # Create the event record with the logged in user as the explicit organizer
         event = await crud.create_event(
             db,
             event_name=request.event_name,
-            organizer_name=request.organizer_name,
+            organizer_name=current_user.email,
             event_rules_and_context=request.event_rules_and_context,
             total_budget_allocated=request.total_budget_allocated,
             master_schedule=request.master_schedule,
             budget_report=request.budget_report,
         )
 
-        # Auto-generate and persist the participant join code
-        code = _generate_code(request.event_name)
-        event_code = EventCode(event_id=event.event_id, code=code)
+        # Auto-generate and persist the join codes
+        p_code = _generate_code(request.event_name, "P")
+        o_code = _generate_code(request.event_name, "O")
+        event_code = EventCode(event_id=event.event_id, participant_code=p_code, organizer_code=o_code)
         db.add(event_code)
         await db.commit()
         await db.refresh(event_code)
 
-        logger.info(f"Created event {event.event_id} with participant code: {code}")
+        logger.info(f"Created event {event.event_id} with P-code: {p_code}, O-code: {o_code}")
 
         return EventResponse(
             event_id=event.event_id,
@@ -167,8 +173,9 @@ async def create_event(
             total_budget_allocated=event.total_budget_allocated,
             master_schedule=event.master_schedule or {},
             budget_report=event.budget_report or {},
-            participant_code=code,
-            join_link=_join_link(code),
+            participant_code=p_code,
+            organizer_code=o_code,
+            join_link=_join_link(p_code),
         )
     except Exception as e:
         logger.error(f"Error creating event: {e}")
@@ -304,8 +311,9 @@ async def get_event_code(
 
         return EventCodeResponse(
             event_id=event_id,
-            code=event_code.code,
-            join_link=_join_link(event_code.code),
+            participant_code=event_code.participant_code,
+            organizer_code=event_code.organizer_code,
+            join_link=_join_link(event_code.participant_code),
             created_at=event_code.created_at,
         )
     except HTTPException:

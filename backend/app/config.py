@@ -6,14 +6,13 @@ to all configuration parameters needed by the application.
 """
 
 from pydantic_settings import BaseSettings
-````
 
 
 class Settings(BaseSettings):
-    """Application settings loaded from environment variables."""
+    """Application settings loaded from enviroanment variables."""
 
-    # Database connection string (SQLite for local dev, PostgreSQL for production)
-    DATABASE_URL: str = "sqlite+aiosqlite:///./event_command_center.db"
+    # Database connection string — defaults to Neon PostgreSQL
+    DATABASE_URL: str = "postgresql+asyncpg://neondb_owner:npg_03CchjoxuSye@ep-late-credit-a1rnvk13-pooler.ap-southeast-1.aws.neon.tech/neondb"
 
     # Groq API key for Llama-3 access
     GROQ_API_KEY: str = ""
@@ -24,9 +23,16 @@ class Settings(BaseSettings):
     # LLM model identifier (Groq-hosted)
     LLM_MODEL: str = "llama-3.3-70b-versatile"
 
-    # Gmail SMTP settings for sending real emails
     SMTP_USER: str = ""          # e.g. yourname@gmail.com
     SMTP_APP_PASSWORD: str = ""  # Gmail App Password (not your regular password)
+
+    # JWT authentication settings
+    JWT_SECRET_KEY: str = "your-super-secret-jwt-key-change-this-in-production"
+    JWT_ALGORITHM: str = "HS256"
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    
+    # Google OAuth settings
+    GOOGLE_CLIENT_ID: str = ""
 
     model_config = {
         "env_file": ".env",

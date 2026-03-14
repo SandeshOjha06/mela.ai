@@ -12,6 +12,43 @@ from pydantic import BaseModel, Field
 
 
 # ---------------------------------------------------------------------------
+# Auth Schemas
+# ---------------------------------------------------------------------------
+
+class UserCreate(BaseModel):
+    """Schema for user registration."""
+    email: str = Field(..., max_length=255)
+    password: str = Field(..., min_length=6)
+    role: str = Field(default="participant", description="'organizer' or 'participant'")
+
+
+class UserResponse(BaseModel):
+    """Schema for user API responses."""
+    user_id: int
+    email: str
+    role: str
+
+    model_config = {"from_attributes": True}
+
+
+class LoginRequest(BaseModel):
+    """JSON login request body."""
+    email: str
+    password: str
+
+
+class Token(BaseModel):
+    """JWT token response."""
+    access_token: str
+    token_type: str
+
+
+class TokenData(BaseModel):
+    """Data extracted from JWT token."""
+    user_id: int
+
+
+# ---------------------------------------------------------------------------
 # Event Schemas
 # ---------------------------------------------------------------------------
 
@@ -33,6 +70,9 @@ class EventCreate(EventBase):
 class EventResponse(EventBase):
     """Schema for event API responses."""
     event_id: int
+    participant_code: Optional[str] = None
+    organizer_code: Optional[str] = None
+    join_link: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -253,22 +293,24 @@ class BudgetAgentResult(BaseModel):
     logs: list[str] = Field(default_factory=list)
 
 class EventCodeResponse(BaseModel):
-    """
-    Response schema for the participant join code.
-    Returned both on event creation and via the dedicated
-    GET /organizer/events/{event_id}/code endpoint.
-    """
+    """Schema for event code responses."""
     event_id: int
-    code: str = Field(description="Shareable join code, e.g. NEU-2026-7X3K")
-    join_link: str = Field(description="Full frontend URL to share with participants")
+    participant_code: str
+    organizer_code: str
+    join_link: str
     created_at: datetime
- 
+
     model_config = {"from_attributes": True}
- 
- 
+
 class JoinEventRequest(BaseModel):
-    """Request body for a participant joining via code."""
-    code: str = Field(..., min_length=3, max_length=20, description="Event join code shared by organizer")
+    """Participant joins using an event code."""
+    code: str = Field(..., description="The participant join code provided by the organizer")
+    name: Optional[str] = Field(None, description="Participant's full name")
+    email: str = Field(..., max_length=255)
+
+class JoinOrganizerRequest(BaseModel):
+    """Organizer joins using an event code."""
+    code: str = Field(..., description="The organizer join code provided by the lead organizer")
     email: str = Field(..., max_length=255, description="Participant's email address")
     name: Optional[str] = Field(None, max_length=255, description="Participant's name")
 
