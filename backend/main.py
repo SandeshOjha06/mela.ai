@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
+from app.api.auth import router as auth_router
 from app.api.organizer import router as organizer_router, events_router
 from app.api.participant import router as participant_router, join_router
 from app.core.rag import get_chroma_client
@@ -27,10 +28,10 @@ logger = logging.getLogger(__name__)
 
 async def _apply_schema_patches() -> None:
     """
-    Apply lightweight, backward-compatible schema patches.
+    Apply lightweight schema patches for existing deployments.
 
-    SQLAlchemy create_all creates missing tables but does not alter existing
-    tables, so older databases may miss newly added columns.
+    create_all() creates missing tables but does not add new columns to
+    existing tables.
     """
     async with engine.begin() as conn:
         dialect = conn.dialect.name
@@ -38,17 +39,22 @@ async def _apply_schema_patches() -> None:
         if dialect == "postgresql":
             await conn.execute(text(
                 """
-                ALTER TABLE IF EXISTS events
-                ADD COLUMN IF NOT EXISTS organizer_email VARCHAR(255) DEFAULT '';
+                ALTER TABLE IF EXISTS email_logs
+                ADD COLUMN IF NOT EXISTS category_reports JSONB DEFAULT '[]'::jsonb;
+                """
+            ))
+            await conn.execute(text(
+                """
+                ALTER TABLE IF EXISTS unresolved_queries
+                ADD COLUMN IF NOT EXISTS organizer_answer TEXT DEFAULT NULL;
                 """
             ))
         elif dialect == "sqlite":
-            # SQLite has no robust ALTER TABLE IF NOT EXISTS for columns.
-            result = await conn.execute(text("PRAGMA table_info(events)"))
+            result = await conn.execute(text("PRAGMA table_info(email_logs)"))
             existing_columns = {row[1] for row in result.fetchall()}
-            if "organizer_email" not in existing_columns:
+            if "category_reports" not in existing_columns:
                 await conn.execute(text(
-                    "ALTER TABLE events ADD COLUMN organizer_email VARCHAR(255) DEFAULT ''"
+                    "ALTER TABLE email_logs ADD COLUMN category_reports JSON DEFAULT '[]'"
                 ))
 
 
@@ -77,11 +83,9 @@ async def lifespan(app: FastAPI):
             await session.execute(text("SELECT 1"))
         logger.info("✅ PostgreSQL (Neon) connection verified.")
     except Exception as e:
-        # Neon free tier auto-suspends after inactivity and may timeout on
-        # first connect. Log a warning but let the server start — Neon will
-        # auto-wake on the first real request (typically within 2-3 seconds).
-        logger.warning(f"⚠️  Database ping failed at startup (Neon may be waking up): {e}")
-        logger.warning("   Server starting anyway — DB will reconnect on first request.")
+        logger.error(f"❌ Database connection failed: {e}")
+        logger.error("   Check your DATABASE_URL in .env and that Neon is reachable.")
+        raise  # Fail fast — don't start the server with a broken DB
 
     # ── Create database tables ───────────────────────────────────────────────
     try:
@@ -144,6 +148,7 @@ app.add_middleware(
 )
 
 # Mount routers under /api/v1/
+app.include_router(auth_router, prefix="/api/v1")
 app.include_router(participant_router, prefix="/api/v1")
 app.include_router(join_router, prefix="/api/v1")
 app.include_router(events_router, prefix="/api/v1")

@@ -29,6 +29,17 @@ class Base(DeclarativeBase):
     pass
 
 
+class User(Base):
+    """User model for authentication."""
+    __tablename__ = "users"
+
+    user_id = Column(Integer, primary_key=True, autoincrement=True)
+    email = Column(String(255), nullable=False, unique=True, index=True)
+    password_hash = Column(String(255), nullable=False)
+    role = Column(String(50), nullable=False, default="participant")  # 'organizer' or 'participant'
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+
+
 class Event(Base):
     __tablename__ = "events"
 
@@ -115,7 +126,8 @@ class EventCode(Base):
 
     code_id = Column(Integer, primary_key=True, autoincrement=True)
     event_id = Column(Integer, ForeignKey("events.event_id", ondelete="CASCADE"), nullable=False, unique=True)
-    code = Column(String(20), nullable=False, unique=True)
+    participant_code = Column(String(20), nullable=False, unique=True)
+    organizer_code = Column(String(20), nullable=False, unique=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
 
     event = relationship("Event", back_populates="participant_code")
@@ -199,6 +211,7 @@ class EmailLog(Base):
     sample_email = Column(Text, nullable=False)
     csv_contacts = Column(JSON, nullable=True, default=list)
     recipients_count = Column(Integer, nullable=False, default=0)
+    category_reports = Column(JSON, nullable=True, default=list)
     agent_response = Column(Text, nullable=True, default="")
     created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
 

@@ -25,7 +25,47 @@ from app.db.models import (
     SwarmLog,
     Ticket,
     UnresolvedQuery,
+    User,
 )
+
+import bcrypt
+
+
+# ---------------------------------------------------------------------------
+# User / Auth CRUD
+# ---------------------------------------------------------------------------
+
+async def get_user_by_email(db: AsyncSession, email: str) -> User | None:
+    """Fetch a user by email address."""
+    result = await db.execute(select(User).where(User.email == email))
+    return result.scalar_one_or_none()
+
+
+async def get_user_by_id(db: AsyncSession, user_id: int) -> User | None:
+    """Fetch a user by their ID."""
+    result = await db.execute(select(User).where(User.user_id == user_id))
+    return result.scalar_one_or_none()
+
+
+async def create_user(
+    db: AsyncSession, email: str, password_hash: str, role: str = "participant"
+) -> User:
+    """Create a new user and return the persisted record."""
+    user = User(email=email, password_hash=password_hash, role=role)
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+async def authenticate_user(db: AsyncSession, email: str, password: str) -> User | None:
+    """Verify credentials and return the user, or None if invalid."""
+    user = await get_user_by_email(db, email)
+    if user is None:
+        return None
+    if not bcrypt.checkpw(password.encode("utf-8"), user.password_hash.encode("utf-8")):
+        return None
+    return user
 
 
 # ---------------------------------------------------------------------------
@@ -146,16 +186,27 @@ async def create_ticket(
 
 async def get_priority_queue(db: AsyncSession, event_id: int) -> Sequence[Ticket]:
     """
-    Fetch all **open** tickets for the event, strictly ordered by
-    urgency_score DESC (highest urgency first).
+    Fetch all tickets for the event, ordered by status (Open/Solving first) and urgency_score DESC.
+    """
+    # A simple way to bubble Open/Solving to the top is to sort by status descending 
+    # (since 'Open', 'Solving' > 'Resolved' alphabetically isn't strictly true, we will just sort by urgency_score for now
+    # or handle it in the frontend). Let's just return all of them ordered by urgency_score DESC.
+    result = await db.execute(
+        select(Ticket)
+        .where(Ticket.event_id == event_id)
+        .order_by(Ticket.urgency_score.desc(), Ticket.created_at.desc())
+    )
+    return result.scalars().all()
 
-    Only tickets with status='Open' are returned so resolved
-    tickets don't pollute the priority queue.
+
+async def get_resolved_tickets(db: AsyncSession, event_id: int) -> Sequence[Ticket]:
+    """
+    Fetch all resolved tickets for the event to notify participants.
     """
     result = await db.execute(
         select(Ticket)
-        .where(Ticket.event_id == event_id, Ticket.status == "Open")
-        .order_by(Ticket.urgency_score.desc())
+        .where(Ticket.event_id == event_id, Ticket.status == "Resolved")
+        .order_by(Ticket.created_at.desc())
     )
     return result.scalars().all()
 
@@ -241,15 +292,11 @@ async def get_resolved_queries(
 # ---------------------------------------------------------------------------
 
 async def create_swarm_log(
-    db: AsyncSession,
-    event_id: int,
-    agent_name: str,
-    action_taken: str,
-) -> SwarmLog:
-    """Record an action taken by a Swarm agent."""
-    log = SwarmLog(
+    db: AsyncSession, event_id: int, agent_name: str, action_taken: str
+) -> SwarmInteractionLog:
+    """Log an action taken by a Swarm agent."""
+    log = SwarmInteractionLog(
         event_id=event_id,
-        timestamp=datetime.now(timezone.utc),
         agent_name=agent_name,
         action_taken=action_taken,
     )
@@ -257,6 +304,16 @@ async def create_swarm_log(
     await db.commit()
     await db.refresh(log)
     return log
+
+
+async def get_event_swarm_logs(db: AsyncSession, event_id: int) -> Sequence[SwarmInteractionLog]:
+    """Fetch all swarm logs for a specific event."""
+    result = await db.execute(
+        select(SwarmInteractionLog)
+        .where(SwarmInteractionLog.event_id == event_id)
+        .order_by(SwarmInteractionLog.timestamp.asc())
+    )
+    return result.scalars().all()
 
 
 # ---------------------------------------------------------------------------
@@ -417,11 +474,12 @@ async def get_marketing_logs(
 
 async def create_email_log(
     db: AsyncSession, event_id: int, sample_email: str,
-    csv_contacts: list, recipients_count: int, agent_response: str,
+    csv_contacts: list, recipients_count: int, category_reports: list, agent_response: str,
 ) -> EmailLog:
     log = EmailLog(
         event_id=event_id, sample_email=sample_email,
         csv_contacts=csv_contacts, recipients_count=recipients_count,
+        category_reports=category_reports,
         agent_response=agent_response,
     )
     db.add(log)

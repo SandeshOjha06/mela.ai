@@ -28,6 +28,7 @@ from app.schemas.schemas import (
     JoinEventResponse,
     SwarmResult,
     TimelineResponse,
+    TicketResponse,
 )
 from app.swarm.graph import swarm_graph
 
@@ -61,14 +62,14 @@ async def join_event(
     try:
         # Look up the code
         result = await db.execute(
-            select(EventCode).where(EventCode.code == request.code.upper().strip())
+            select(EventCode).where(EventCode.participant_code == request.code.upper().strip())
         )
         event_code = result.scalar_one_or_none()
 
         if event_code is None:
             raise HTTPException(
                 status_code=404,
-                detail="Invalid event code. Please check the code shared by your organizer."
+                detail="Invalid participant code. Please check the code shared by your organizer."
             )
 
         # Fetch the associated event
@@ -105,6 +106,48 @@ async def join_event(
         raise
     except Exception as e:
         logger.error(f"Error joining event with code {request.code}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error joining event.")
+
+# ---------------------------------------------------------------------------
+# POST /events/join/organizer  — organizer joins via lead organizer code
+# ---------------------------------------------------------------------------
+@join_router.post("/join/organizer", response_model=JoinEventResponse)
+async def join_organizer(
+    request: JoinEventRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Organizer joins an event using the specific organizer code.
+    """
+    try:
+        # Look up the code
+        result = await db.execute(
+            select(EventCode).where(EventCode.organizer_code == request.code.upper().strip())
+        )
+        event_code = result.scalar_one_or_none()
+
+        if event_code is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Invalid organizer code. Please check the code."
+            )
+
+        # Fetch the associated event
+        event = await crud.get_event_context(db, event_code.event_id)
+        if event is None:
+            raise HTTPException(status_code=404, detail="Event not found.")
+
+        return JoinEventResponse(
+            event_id=event.event_id,
+            event_name=event.event_name,
+            organizer_name=event.organizer_name,
+            master_schedule=event.master_schedule or {},
+            message=f"Welcome to {event.event_name} Organizing Team!",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error joining event as organizer with code {request.code}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error joining event.")
 
 
@@ -149,33 +192,36 @@ async def chat_with_rag(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Context-aware RAG Chatbot endpoint for Participants.
+    Context-aware RAG Chatbot endpoint.
 
-    Queries ChromaDB (which now contains synced schedule + rules chunks)
-    for the best matching answer, then asks the LLM to form a clean
-    natural-language response.
+    Combines event data from PostgreSQL (budget, schedule, rules) with
+    any resolved Q&A from ChromaDB, then uses the LLM to generate a
+    natural-language answer grounded in real event context.
 
-    SECURE: Budget data and internal financial info are never exposed.
+    Falls back to organizer escalation only when neither source helps.
     """
     try:
         event = await crud.get_event_context(db, event_id)
         if event is None:
             raise HTTPException(status_code=404, detail=f"Event {event_id} not found.")
 
-        # ── 1. Query ChromaDB for any matching data (rules, schedule, QA) ──
-        # Since we sync Postgres data to Chroma on create/update, it will
-        # find the exact session or rule without needing raw JSON in the prompt.
-        rag_answer, rag_confidence = query_rag(event_id=event_id, question=request.question)
+        # ── 1. Build context from PostgreSQL ─────────────────────────────
+        import json as _json
+        schedule_str = _json.dumps(event.master_schedule, indent=2) if event.master_schedule else "No schedule available."
 
-        # ── 2. Build safe minimal context (budget NEVER included) ────────────
         pg_context = f"""EVENT NAME: {event.event_name}
-ORGANIZER: {event.organizer_name}"""
+ORGANIZER: {event.organizer_name}
+RULES & CONTEXT: {event.event_rules_and_context or "No specific rules."}
+MASTER SCHEDULE: {schedule_str}"""
+
+        # ── 2. Query ChromaDB for resolved Q&A ──────────────────────────
+        rag_answer, rag_confidence = query_rag(event_id=event_id, question=request.question)
 
         rag_section = ""
         if rag_answer and rag_confidence >= 0.5:
-            rag_section = f"\n\nRETRIEVED KNOWLEDGE BASE RESULTS:\n{rag_answer}"
+            rag_section = f"\n\nPREVIOUSLY RESOLVED Q&A (confidence {rag_confidence}):\n{rag_answer}"
 
-        # ── 3. Ask LLM to answer using safe context ─────────────────────────
+        # ── 3. Ask LLM to answer using combined context ─────────────────
         from langchain_groq import ChatGroq
         from langchain_core.messages import SystemMessage as _Sys, HumanMessage as _Hum
         from app.config import settings
@@ -186,9 +232,10 @@ ORGANIZER: {event.organizer_name}"""
             temperature=0.3,
         )
 
-        system_prompt = f"""You are a helpful and polite Q&A assistant for participants of '{event.event_name}'.
-Answer the participant's question using ONLY the provided knowledge base context below.
-If the context does not contain the answer, say so honestly. Do NOT make up schedules, rules, or locations.
+        system_prompt = f"""You are a helpful Q&A assistant for participants of an event.
+Answer the participant's question using ONLY the event information provided below.
+If the information is not available in the context, say so honestly.
+Be concise, friendly, and direct. Do NOT make up information.
 
 {pg_context}{rag_section}"""
 
@@ -199,15 +246,17 @@ If the context does not contain the answer, say so honestly. Do NOT make up sche
 
         answer_text = response.content.strip()
 
-        # ── 4. Determine confidence & escalation ─────────────────────────────
+        # ── 4. Determine confidence ─────────────────────────────────────
+        # If the LLM says it doesn't know, treat as low confidence
         no_answer_phrases = [
             "not available", "don't have", "no information",
             "cannot find", "not provided", "not mentioned",
-            "i'm not sure", "i don't know", "does not contain",
+            "i'm not sure", "i don't know",
         ]
         is_uncertain = any(phrase in answer_text.lower() for phrase in no_answer_phrases)
 
-        if is_uncertain or rag_confidence < 0.4:
+        if is_uncertain:
+            # Save as unresolved for the organizer to answer
             await crud.create_unresolved_query(
                 db=db,
                 event_id=event_id,
@@ -215,7 +264,8 @@ If the context does not contain the answer, say so honestly. Do NOT make up sche
             )
             return ChatResponse(
                 answer=(
-                    "I don't have that info right now — your question has been forwarded to the organizers!"
+                    f"{answer_text}\n\nYour question has been forwarded to the "
+                    "event organizers for a detailed response."
                 ),
                 confidence=0.3,
                 source="fallback",
@@ -230,7 +280,8 @@ If the context does not contain the answer, say so honestly. Do NOT make up sche
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error in chat for event {event_id}: {e}")
+        import traceback
+        logger.error(f"Error in chat for event {event_id}: {e}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail="Internal server error processing chat.")
 
 
@@ -367,3 +418,28 @@ async def get_event_info(
     except Exception as e:
         logger.error(f"Error fetching info for event {event_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error fetching event info.")
+
+
+# GET /events/{event_id}/resolved_tickets — for participant notifications
+
+@router.get("/resolved_tickets", response_model=list[TicketResponse])
+async def get_resolved_tickets(
+    event_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Fetch resolved support tickets for notifications."""
+    try:
+        tickets = await crud.get_resolved_tickets(db, event_id)
+        return [
+            TicketResponse(
+                ticket_id=t.ticket_id,
+                issue_text=t.issue_text,
+                problem_category=t.problem_category,
+                urgency_score=t.urgency_score,
+                status=t.status,
+                created_at=t.created_at,
+            ) for t in tickets
+        ]
+    except Exception as e:
+        logger.error(f"Error fetching resolved tickets for {event_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")

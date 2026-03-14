@@ -12,6 +12,43 @@ from pydantic import BaseModel, Field
 
 
 # ---------------------------------------------------------------------------
+# Auth Schemas
+# ---------------------------------------------------------------------------
+
+class UserCreate(BaseModel):
+    """Schema for user registration."""
+    email: str = Field(..., max_length=255)
+    password: str = Field(..., min_length=6)
+    role: str = Field(default="participant", description="'organizer' or 'participant'")
+
+
+class UserResponse(BaseModel):
+    """Schema for user API responses."""
+    user_id: int
+    email: str
+    role: str
+
+    model_config = {"from_attributes": True}
+
+
+class LoginRequest(BaseModel):
+    """JSON login request body."""
+    email: str
+    password: str
+
+
+class Token(BaseModel):
+    """JWT token response."""
+    access_token: str
+    token_type: str
+
+
+class TokenData(BaseModel):
+    """Data extracted from JWT token."""
+    user_id: int
+
+
+# ---------------------------------------------------------------------------
 # Event Schemas
 # ---------------------------------------------------------------------------
 
@@ -19,7 +56,6 @@ class EventBase(BaseModel):
     """Base schema for event data."""
     event_name: str = Field(..., max_length=255, description="Name of the event")
     organizer_name: str = Field(..., max_length=255, description="Name of the organizer")
-    organizer_email: Optional[str] = Field(default="", max_length=255, description="Organizer's email — used as Reply-To on participant emails")
     event_rules_and_context: str = Field(default="", description="Rules and context injected into agent prompts")
     total_budget_allocated: float = Field(default=0.0, ge=0, description="Total budget for the event")
     master_schedule: dict[str, Any] = Field(default_factory=dict, description="Master schedule as JSON")
@@ -34,10 +70,9 @@ class EventCreate(EventBase):
 class EventResponse(EventBase):
     """Schema for event API responses."""
     event_id: int
-    participant_code: str = Field(description="Participant join code to share with attendees")
-    participant_join_link: str = Field(description="Frontend participant join URL")
-    organizer_code: str = Field(description="Organizer-team join code to share with co-organizers")
-    organizer_join_link: str = Field(description="Frontend organizer-team join URL")
+    participant_code: Optional[str] = None
+    organizer_code: Optional[str] = None
+    join_link: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -103,6 +138,11 @@ class TicketResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class TicketStatusUpdateRequest(BaseModel):
+    """Request schema for updating a ticket status."""
+    status: str = Field(..., description="E.g., 'Open', 'Solving', 'Resolved'")
+
+
 # ---------------------------------------------------------------------------
 # Swarm Trigger Schemas
 # ---------------------------------------------------------------------------
@@ -150,6 +190,7 @@ class UnresolvedQueryResponse(BaseModel):
     query_id: int
     event_id: int
     question_text: str
+    organizer_answer: str | None = None
     status: str
 
     model_config = {"from_attributes": True}
@@ -217,10 +258,22 @@ class ScheduleAgentResult(BaseModel):
     logs: list[str] = Field(default_factory=list)
 
 
+class EmailCategoryReport(BaseModel):
+    """Per-category delivery result and generated draft from Email Agent."""
+    category: str
+    status: str
+    attempted: int = 0
+    sent: int = 0
+    subject: str = ""
+    body: str = ""
+    message: str = ""
+
+
 class EmailCampaignResult(BaseModel):
     """Response from the email campaign agent."""
     event_id: int
     recipients_count: int
+    category_reports: list[EmailCategoryReport] = Field(default_factory=list)
     logs: list[str] = Field(default_factory=list)
 
 
@@ -258,25 +311,24 @@ class BudgetAgentResult(BaseModel):
     logs: list[str] = Field(default_factory=list)
 
 class EventCodeResponse(BaseModel):
-    """
-    Response schema for the participant join code.
-    Returned both on event creation and via the dedicated
-    GET /organizer/events/{event_id}/code endpoint.
-    """
+    """Schema for event code responses."""
     event_id: int
-    code: str = Field(description="Participant join code, e.g. NEU-2026-7X3K")
-    join_link: str = Field(description="Full frontend URL to share with participants")
+    participant_code: str
+    organizer_code: str
+    join_link: str
     created_at: datetime
-    organizer_code: str = Field(description="Organizer-team join code")
-    organizer_join_link: str = Field(description="Full frontend URL to share with organizer team")
-    organizer_created_at: datetime
- 
+
     model_config = {"from_attributes": True}
- 
- 
+
 class JoinEventRequest(BaseModel):
-    """Request body for a participant joining via code."""
-    code: str = Field(..., min_length=3, max_length=20, description="Event join code shared by organizer")
+    """Participant joins using an event code."""
+    code: str = Field(..., description="The participant join code provided by the organizer")
+    name: Optional[str] = Field(None, description="Participant's full name")
+    email: str = Field(..., max_length=255)
+
+class JoinOrganizerRequest(BaseModel):
+    """Organizer joins using an event code."""
+    code: str = Field(..., description="The organizer join code provided by the lead organizer")
     email: str = Field(..., max_length=255, description="Participant's email address")
     name: Optional[str] = Field(None, max_length=255, description="Participant's name")
 
@@ -290,22 +342,6 @@ class JoinEventResponse(BaseModel):
     event_name: str
     organizer_name: str
     master_schedule: dict[str, Any]
-    message: str
-
-
-class OrganizerTeamJoinRequest(BaseModel):
-    """Request body for an organizer-team member joining via organizer code."""
-    code: str = Field(..., min_length=3, max_length=20, description="Organizer-team join code")
-    email: str = Field(..., max_length=255, description="Organizer member email")
-    name: Optional[str] = Field(None, max_length=255, description="Organizer member name")
-
-
-class OrganizerTeamJoinResponse(BaseModel):
-    """Response after an organizer-team member successfully joins an event."""
-    event_id: int
-    event_name: str
-    organizer_name: str
-    team_member_count: int
     message: str
 
 
@@ -333,6 +369,8 @@ class EventListItem(BaseModel):
     status: str
     created_at: datetime
     total_budget_allocated: float
+    participant_code: Optional[str] = None
+    organizer_code: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -351,6 +389,8 @@ class EventDetailResponse(BaseModel):
     participant_count: int
     ticket_count: int
     unresolved_query_count: int
+    participant_code: Optional[str] = None
+    organizer_code: Optional[str] = None
 
 
 class EventStatusUpdate(BaseModel):
@@ -401,6 +441,7 @@ class EmailLogResponse(BaseModel):
     sample_email: str
     csv_contacts: list[Any]
     recipients_count: int
+    category_reports: list[EmailCategoryReport] = Field(default_factory=list)
     agent_response: str
     created_at: datetime
     model_config = {"from_attributes": True}

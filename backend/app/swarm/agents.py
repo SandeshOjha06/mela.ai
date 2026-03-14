@@ -533,6 +533,7 @@ Output ONLY the JSON object — no preamble, no explanation, no markdown fences.
     send_log_lines: list[str] = []
     total_sent = 0
     delivery_results: list[dict[str, Any]] = []
+    category_reports: list[dict[str, Any]] = []
 
     for segment_name, email_data in segment_emails.items():
         subject = email_data.get("subject", "Event Update Notification")
@@ -550,6 +551,15 @@ Output ONLY the JSON object — no preamble, no explanation, no markdown fences.
             segment_recipients = []
 
         if not segment_recipients:
+            category_reports.append({
+                "category": segment_name,
+                "status": "skipped",
+                "attempted": 0,
+                "sent": 0,
+                "subject": subject,
+                "body": body,
+                "message": "No recipients found for this category.",
+            })
             send_log_lines.append(f"  - Segment '{segment_name}': 0 recipients (skipped)")
             continue
 
@@ -568,6 +578,15 @@ Output ONLY the JSON object — no preamble, no explanation, no markdown fences.
             "status": send_result.get("status", "unknown"),
             "message": send_result.get("message", ""),
             "sent": int(send_result.get("recipients_count", 0)),
+        })
+        category_reports.append({
+            "category": segment_name,
+            "status": send_result.get("status", "unknown"),
+            "attempted": len(segment_recipients),
+            "sent": int(send_result.get("recipients_count", 0)),
+            "subject": subject,
+            "body": body,
+            "message": send_result.get("message", ""),
         })
         total_sent += int(send_result.get("recipients_count", 0))
         send_log_lines.append(
@@ -604,6 +623,7 @@ Output ONLY the JSON object — no preamble, no explanation, no markdown fences.
                 sample_email=sample_template,
                 csv_contacts=csv_contacts,
                 recipients_count=total_sent,
+                category_reports=category_reports,
                 agent_response=log_msg,
             )
     except Exception as e:
@@ -613,6 +633,8 @@ Output ONLY the JSON object — no preamble, no explanation, no markdown fences.
         )
 
     return {
+        "email_recipients_count": total_sent,
+        "email_category_reports": category_reports,
         "messages": [AIMessage(content=log_msg, name="Email_Agent")],
     }
 
