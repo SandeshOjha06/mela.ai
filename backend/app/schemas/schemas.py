@@ -252,10 +252,22 @@ class ScheduleAgentResult(BaseModel):
     logs: list[str] = Field(default_factory=list)
 
 
+class EmailCategoryReport(BaseModel):
+    """Per-category delivery result and generated draft from Email Agent."""
+    category: str
+    status: str
+    attempted: int = 0
+    sent: int = 0
+    subject: str = ""
+    body: str = ""
+    message: str = ""
+
+
 class EmailCampaignResult(BaseModel):
     """Response from the email campaign agent."""
     event_id: int
     recipients_count: int
+    category_reports: list[EmailCategoryReport] = Field(default_factory=list)
     logs: list[str] = Field(default_factory=list)
 
 
@@ -419,6 +431,7 @@ class EmailLogResponse(BaseModel):
     sample_email: str
     csv_contacts: list[Any]
     recipients_count: int
+    category_reports: list[EmailCategoryReport] = Field(default_factory=list)
     agent_response: str
     created_at: datetime
     model_config = {"from_attributes": True}

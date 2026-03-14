@@ -9,7 +9,7 @@ import operator
 from typing import Annotated, Any, Sequence
 
 from langchain_core.messages import BaseMessage
-from typing_extensions import TypedDict
+from typing_extensions import NotRequired, TypedDict
 
 
 class EventState(TypedDict):
@@ -65,6 +65,10 @@ class EventState(TypedDict):
     # Email agent: parsed CSV contacts and sample template
     email_csv_data: list[dict[str, Any]]
     email_sample_template: str
+
+    # Email agent outputs for API/UI consumption
+    email_recipients_count: NotRequired[int]
+    email_category_reports: NotRequired[list[dict[str, Any]]]
 
     # Scheduler agent: constraint text and time-based overrides
     schedule_prompt: str

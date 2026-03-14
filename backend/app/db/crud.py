@@ -409,11 +409,12 @@ async def get_marketing_logs(
 
 async def create_email_log(
     db: AsyncSession, event_id: int, sample_email: str,
-    csv_contacts: list, recipients_count: int, agent_response: str,
+    csv_contacts: list, recipients_count: int, category_reports: list, agent_response: str,
 ) -> EmailLog:
     log = EmailLog(
         event_id=event_id, sample_email=sample_email,
         csv_contacts=csv_contacts, recipients_count=recipients_count,
+        category_reports=category_reports,
         agent_response=agent_response,
     )
     db.add(log)

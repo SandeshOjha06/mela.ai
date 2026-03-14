@@ -730,7 +730,8 @@ async def run_email_agent(
 
         return EmailCampaignResult(
             event_id=event_id,
-            recipients_count=len(csv_contacts),
+            recipients_count=int(result.get("email_recipients_count", len(csv_contacts))),
+            category_reports=result.get("email_category_reports", []),
             logs=log_messages,
         )
     except HTTPException:

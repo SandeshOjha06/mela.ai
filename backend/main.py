@@ -26,6 +26,32 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+async def _apply_schema_patches() -> None:
+    """
+    Apply lightweight schema patches for existing deployments.
+
+    create_all() creates missing tables but does not add new columns to
+    existing tables.
+    """
+    async with engine.begin() as conn:
+        dialect = conn.dialect.name
+
+        if dialect == "postgresql":
+            await conn.execute(text(
+                """
+                ALTER TABLE IF EXISTS email_logs
+                ADD COLUMN IF NOT EXISTS category_reports JSONB DEFAULT '[]'::jsonb;
+                """
+            ))
+        elif dialect == "sqlite":
+            result = await conn.execute(text("PRAGMA table_info(email_logs)"))
+            existing_columns = {row[1] for row in result.fetchall()}
+            if "category_reports" not in existing_columns:
+                await conn.execute(text(
+                    "ALTER TABLE email_logs ADD COLUMN category_reports JSON DEFAULT '[]'"
+                ))
+
+
 # ---------------------------------------------------------------------------
 # Lifespan — startup & shutdown
 # ---------------------------------------------------------------------------
@@ -62,6 +88,14 @@ async def lifespan(app: FastAPI):
         logger.info("✅ Database tables created/verified.")
     except Exception as e:
         logger.error(f"❌ Table creation failed: {e}")
+        raise
+
+    # ── Apply schema patches for existing deployments ───────────────────────
+    try:
+        await _apply_schema_patches()
+        logger.info("✅ Schema patch check complete.")
+    except Exception as e:
+        logger.error(f"❌ Schema patch failed: {e}")
         raise
 
     # ── Initialize ChromaDB ──────────────────────────────────────────────────

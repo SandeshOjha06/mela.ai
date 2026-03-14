@@ -179,6 +179,7 @@ class EmailLog(Base):
     sample_email = Column(Text, nullable=False)
     csv_contacts = Column(JSON, nullable=True, default=list)
     recipients_count = Column(Integer, nullable=False, default=0)
+    category_reports = Column(JSON, nullable=True, default=list)
     agent_response = Column(Text, nullable=True, default="")
     created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
 
