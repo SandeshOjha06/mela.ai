@@ -1,6 +1,6 @@
-# Swarmy: Autonomous Event Command Center
+# mela.ai: Autonomous Event Command Center
 
-Swarmy is a scalable, multi-tenant application for managing large-scale event logistics with AI-powered autonomous agents. Every operation is scoped by event ID for complete data isolation. The platform leverages a swarm of specialized LangGraph agents to handle event tasks such as marketing, scheduling, participant communication, and emergency response.
+mela.ai is a scalable, multi-tenant application for managing large-scale event logistics with AI-powered autonomous agents. Every operation is scoped by event ID for complete data isolation. The platform leverages a swarm of specialized LangGraph agents to handle event tasks such as marketing, scheduling, participant communication, and emergency response.
 
 ## Architecture
 
