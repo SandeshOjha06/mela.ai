@@ -61,4 +61,6 @@ docker-compose up --build
 ```
 This will spin up both the frontend and backend services along with any required infrastructure.
 
+Created by Sandesh and Shishir
+
 
